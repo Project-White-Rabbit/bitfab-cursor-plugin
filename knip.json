@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["src/mcp/server.ts", "src/commands/*.ts", "src/hooks/*.ts"],
+  "project": ["src/**/*.ts"],
+  "ignore": ["src/**/*.test.ts"],
+  "ignoreBinaries": ["biome", "knip", "madge"]
+}
