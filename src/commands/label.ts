@@ -171,14 +171,9 @@ async function main() {
   })
 
   server.listen(port, () => {
-    const firstTraceId = traceIds[0]
-    const labelUrl = new URL(
-      `${config.serviceUrl}/labeling/${encodeURIComponent(firstTraceId)}`,
-    )
+    const labelUrl = new URL(`${config.serviceUrl}/labeling`)
+    labelUrl.searchParams.set("traceIds", traceIds.join(","))
     labelUrl.searchParams.set("callbackPort", String(port))
-    if (traceIds.length > 1) {
-      labelUrl.searchParams.set("traceIds", traceIds.join(","))
-    }
     console.log(
       traceIds.length > 1
         ? `Opening labeling page for ${traceIds.length} traces: ${labelUrl}`
