@@ -48,5 +48,5 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
 }
 
 export function formatUpdateMessage(latest: string): string {
-  return `v${latest} available — run /bitfab:update to update`
+  return `v${latest} available — run /bitfab-update to update`
 }

@@ -1,7 +1,6 @@
 ---
-description: Set up Bitfab tracing — authenticate, instrument, and create replay scripts
-allowed-tools: ["Bash", "Read", "Glob", "Grep", "Edit", "Write", "AskUserQuestion", "mcp__plugin_bitfab_Bitfab__setup_bitfab", "mcp__plugin_bitfab_Bitfab__get_bitfab_api_key"]
-argument-hint: [all|login|instrument|replay]
+name: bitfab-setup
+description: "Set up Bitfab tracing. Usage: /bitfab-setup [all|login|instrument|replay]"
 ---
 
 # Bitfab Setup
@@ -17,10 +16,10 @@ This skill has three phases: **login**, **instrument**, and **replay**. Run indi
 
 | Invocation | Action |
 |---|---|
-| `/bitfab:setup` or `/bitfab:setup all` | Run all three phases in order |
-| `/bitfab:setup login` | Authenticate and retrieve API key |
-| `/bitfab:setup instrument` | Instrument AI workflows with Bitfab tracing |
-| `/bitfab:setup replay` | Create or update replay scripts for instrumented workflows |
+| `/bitfab-setup` or `/bitfab-setup all` | Run all three phases in order |
+| `/bitfab-setup login` | Authenticate and retrieve API key |
+| `/bitfab-setup instrument` | Instrument AI workflows with Bitfab tracing |
+| `/bitfab-setup replay` | Create or update replay scripts for instrumented workflows |
 
 ---
 

@@ -1,6 +1,7 @@
 ---
-
-## description: Iterate on a traced function to improve pass rates using failed traces, labeling, and replay allowed-tools: \["Bash", "Read", "Glob", "Grep", "Edit", "Write", "Agent", "AskUserQuestion", "Skill"\] argument-hint: <trace-function-key>
+name: bitfab-improve
+description: "Improve a traced function with Bitfab. Usage: /bitfab-improve <trace-function-key>"
+---
 
 # Bitfab Improve
 
@@ -40,7 +41,7 @@ If the trace function key is NOT found in the codebase, use `AskUserQuestion` to
 >
 > Options: "Instrument now (Recommended)" — set up tracing inline / "Pick a different function" / "Stop"
 
-If the user chooses **"Instrument now"**, invoke `/bitfab:setup instrument` using the Skill tool, then continue with Phase 2 Check Replay Script.
+If the user chooses **"Instrument now"**, invoke `/bitfab-setup instrument`, then continue with Phase 2 Check Replay Script.
 
 ### Check Replay Script
 
@@ -55,7 +56,7 @@ If no replay script exists or it doesn't cover this function, use `AskUserQuesti
 >
 > Options: "Create replay now (Recommended)" — create the replay script inline / "Pick a different function" / "Stop"
 
-If the user chooses **"Create replay now"**, invoke `/bitfab:setup replay` using the Skill tool, then continue with Phase 3.
+If the user chooses **"Create replay now"**, invoke `/bitfab-setup replay`, then continue with Phase 3.
 
 ## Phase 3: Build Dataset & Establish Expected Outcomes
 

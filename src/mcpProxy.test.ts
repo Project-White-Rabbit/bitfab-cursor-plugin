@@ -135,7 +135,7 @@ describe("McpProxy", () => {
       )
       expect(result).toEqual(
         errorResult(
-          "Not authenticated. Run /bitfab:login to connect your Bitfab account.",
+          "Not authenticated. Run /bitfab-setup login to connect your Bitfab account.",
         ),
       )
     })

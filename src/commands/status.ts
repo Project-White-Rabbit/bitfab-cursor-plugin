@@ -12,7 +12,7 @@ async function main() {
 
   if (!hasCredentials()) {
     console.log("Status: not authenticated")
-    console.log("\nRun /bitfab:login to authenticate.")
+    console.log("\nRun /bitfab-setup login to authenticate.")
     return
   }
 

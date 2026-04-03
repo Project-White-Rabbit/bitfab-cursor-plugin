@@ -101,7 +101,7 @@ async function main() {
   }
 
   if (!hasCredentials()) {
-    console.error("Not authenticated. Run /bitfab:login first.")
+    console.error("Not authenticated. Run /bitfab-setup login first.")
     process.exit(1)
   }
 
