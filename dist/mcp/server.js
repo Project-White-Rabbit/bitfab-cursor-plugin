@@ -143,6 +143,14 @@ server.registerTool("search_traces", {
             .string()
             .optional()
             .describe("Filter by environment (e.g., production, staging, development, preview). Omit to search across all environments."),
+        labelSource: z
+            .enum(["human", "agent"])
+            .optional()
+            .describe('Filter by label source: "human" for manual labels, "agent" for automated labels'),
+        labelResult: z
+            .boolean()
+            .optional()
+            .describe("Filter by label result: true for passing labels, false for failing labels"),
     },
 }, async (args) => proxyToolCall("search_traces", args));
 server.registerTool("read_traces", {
