@@ -5,7 +5,9 @@ description: "Improve a traced function with Bitfab. Usage: /bitfab-improve <tra
 
 # Bitfab Improve
 
-Use Bitfab MCP tools to find what's failing in a traced function, gather labeled failed traces, then iterate on the code/prompts using replay until pass rates improve.
+Use the **local plugin MCP tools** (`mcp__plugin_bitfab_Bitfab__*`) to find what's failing in a traced function, gather labeled failed traces, then iterate on the code/prompts using replay until pass rates improve.
+
+**MCP tools:** This skill uses `list_trace_functions`, `search_traces`, and `read_traces` from the **local plugin MCP server** (bundled with this plugin). Do NOT use the remote Bitfab MCP tools (`mcp__Simforge__*` or `mcp__Bitfab__*`) — use only the `mcp__plugin_bitfab_Bitfab__*` variants.
 
 **Always use** `AskUserQuestion` **when asking questions, reporting results, or presenting choices.** Never print a question as text and wait. Rules:
 
