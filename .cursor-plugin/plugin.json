@@ -1,7 +1,7 @@
 {
   "name": "bitfab",
   "description": "Bitfab LLM evaluation tools for Cursor — trace inspection, grader management, and diagnostics via MCP",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "author": {
     "name": "Bitfab"
   },
