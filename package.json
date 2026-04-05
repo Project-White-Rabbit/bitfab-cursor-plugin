@@ -1,6 +1,6 @@
 {
   "name": "bitfab-cursor-plugin",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Bitfab LLM evaluation tools for Cursor — trace inspection, grader management, and diagnostics via MCP",
   "type": "module",
   "scripts": {
@@ -28,7 +28,9 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "bitfab-plugin-lib": "file:./bitfab-plugin-lib"
+    "bitfab-plugin-lib": "file:./bitfab-plugin-lib",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
