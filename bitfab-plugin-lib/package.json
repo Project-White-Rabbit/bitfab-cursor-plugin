@@ -1,8 +1,11 @@
 {
-  "name": "bitfab-cursor-plugin",
-  "version": "0.1.8",
-  "description": "Bitfab LLM evaluation tools for Cursor — trace inspection, grader management, and diagnostics via MCP",
+  "name": "bitfab-plugin-lib",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared library for Bitfab editor plugins (Claude Code, Cursor, etc.)",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -14,21 +17,14 @@
     "madge": "madge --ts-config ./tsconfig.json --extensions ts --circular ./src",
     "validate": "pnpm lint && pnpm tsc && pnpm knip && pnpm madge"
   },
-  "keywords": [
-    "cursor",
-    "bitfab",
-    "llm",
-    "evaluation",
-    "tracing",
-    "mcp"
-  ],
   "author": "Bitfab",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "bitfab-plugin-lib": "file:./bitfab-plugin-lib"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -48,10 +48,10 @@ Instrument the codebase with Bitfab tracing. Requires authentication (run Login 
 
 Bitfab captures every AI function call — inputs, outputs, and errors — so you can see exactly what your AI is doing and discover what's going wrong. The goal is to have enough context in each trace to tell whether a call succeeded or failed, and why.
 
-1. **Detect the project language** (TypeScript, Python, Ruby, or Go)
-2. **Search for existing SDK usage** (`withSpan`, `@span`, `bitfab_span`, `client.Span`, `getFunction`, `get_function`, etc.)
+1. **Detect the project language** (TypeScript, Python, Ruby, or Go). In a monorepo, identify which directories are **applications** (services, APIs, agents) vs **libraries** (SDKs, shared packages). Focus on application directories.
+2. **Search for existing SDK usage** (`withSpan`, `@span`, `bitfab_span`, `client.Span`, `getFunction`, `get_function`, etc.). In a monorepo, search **each application directory separately** — a root-level search can miss subdirectories.
    - If found: list the trace function keys, then use AskUserQuestion — "Search for more workflows" (find uninstrumented gaps) / "Continue" (skip to replay). If "Continue", skip to Replay.
-   - If not found: proceed.
+   - If not found: **proceed to step 3** — no SDK usage does NOT mean nothing to instrument, it means the SDK hasn't been installed yet. NEVER conclude "nothing to instrument" before completing step 6.
 3. Use the API key from the Login phase (or retrieve it now if already authenticated)
 4. Install the SDK (if not already installed) and set the `BITFAB_API_KEY` environment variable
 5. Call `mcp__plugin_bitfab_Bitfab__setup_bitfab` with the detected language to get the SDK guide. Read it carefully.

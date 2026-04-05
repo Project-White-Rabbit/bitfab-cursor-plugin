@@ -1,4 +1,27 @@
 {
   "version": 1,
-  "hooks": {}
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CURSOR_PLUGIN_ROOT}/scripts/session-start",
+            "async": false
+          }
+        ]
+      },
+      {
+        "matcher": "resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CURSOR_PLUGIN_ROOT}/scripts/session-start",
+            "async": false
+          }
+        ]
+      }
+    ]
+  }
 }

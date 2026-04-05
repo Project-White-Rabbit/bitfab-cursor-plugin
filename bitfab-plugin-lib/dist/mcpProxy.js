@@ -22,6 +22,10 @@ export async function parseResponse(response) {
 }
 export class McpProxy {
     sessionId = null;
+    loginHint;
+    constructor(platform) {
+        this.loginHint = platform.loginHint;
+    }
     async fetch(config, method, params) {
         const headers = {
             "Content-Type": "application/json",
@@ -58,7 +62,7 @@ export class McpProxy {
     }
     async toolCall(config, toolName, args) {
         if (!config.apiKey) {
-            return errorResult("Not authenticated. Run /bitfab-setup login to connect your Bitfab account.");
+            return errorResult(`Not authenticated. Run ${this.loginHint} to connect your Bitfab account.`);
         }
         try {
             await this.ensureSession(config);

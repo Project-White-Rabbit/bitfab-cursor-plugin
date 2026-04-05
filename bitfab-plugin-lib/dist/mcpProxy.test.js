@@ -1,6 +1,16 @@
 import http from "node:http";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { errorResult, McpProxy, parseResponse, parseSSEData, } from "./mcpProxy.js";
+const testPlatform = {
+    authPath: "test",
+    loginHint: "/test:login",
+    setupHint: "/test:setup",
+    updateHint: "/test:update",
+    repo: "Test/test-plugin",
+    cliBinary: "test",
+    displayName: "Test",
+    supportsAutoUpdate: false,
+};
 // --- Unit tests for pure functions ---
 describe("parseSSEData", () => {
     it("extracts data from SSE text", () => {
@@ -96,12 +106,12 @@ describe("McpProxy", () => {
     }
     describe("toolCall", () => {
         it("returns auth error when no API key", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             const result = await proxy.toolCall({ serviceUrl: baseUrl, apiKey: null }, "list_trace_functions", {});
-            expect(result).toEqual(errorResult("Not authenticated. Run /bitfab-setup login to connect your Bitfab account."));
+            expect(result).toEqual(errorResult("Not authenticated. Run /test:login to connect your Bitfab account."));
         });
         it("initializes session then calls tool", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             handler = (_req, res) => {
                 const reqBody = requestLog[requestLog.length - 1]?.body;
                 const parsed = JSON.parse(reqBody);
@@ -133,7 +143,7 @@ describe("McpProxy", () => {
             expect(proxy.getSessionId()).toBe("session-123");
         });
         it("skips initialize when session already exists", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             // First call establishes session
             handler = (_req, res) => {
                 const parsed = JSON.parse(requestLog[requestLog.length - 1].body);
@@ -163,7 +173,7 @@ describe("McpProxy", () => {
             expect(JSON.parse(requestLog[0].body).method).toBe("tools/call");
         });
         it("retries on stale session (404)", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             let callCount = 0;
             handler = (_req, res) => {
                 callCount++;
@@ -204,7 +214,7 @@ describe("McpProxy", () => {
             });
         });
         it("returns error on non-ok response", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             handler = (_req, res) => {
                 const parsed = JSON.parse(requestLog[requestLog.length - 1].body);
                 if (parsed.method === "initialize") {
@@ -227,7 +237,7 @@ describe("McpProxy", () => {
             expect(result).toEqual(errorResult("Bitfab API error (500): Internal Server Error"));
         });
         it("returns error on JSON-RPC error in response", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             handler = (_req, res) => {
                 const parsed = JSON.parse(requestLog[requestLog.length - 1].body);
                 if (parsed.method === "initialize") {
@@ -255,13 +265,13 @@ describe("McpProxy", () => {
             expect(result).toEqual(errorResult("Bitfab error: Tool not found"));
         });
         it("returns error on network failure", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             const result = await proxy.toolCall({ serviceUrl: "http://127.0.0.1:1", apiKey: "key" }, "tool", {});
             expect(result.isError).toBe(true);
             expect(result.content[0].text).toContain("Failed to initialize Bitfab session");
         });
         it("sends correct headers", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             handler = (_req, res) => {
                 res.writeHead(200, {
                     "Content-Type": "text/event-stream",
@@ -280,7 +290,7 @@ describe("McpProxy", () => {
             expect(initReq.headers.authorization).toBe("Bearer test-key");
         });
         it("sends session ID on subsequent requests", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             handler = (_req, res) => {
                 res.writeHead(200, {
                     "Content-Type": "text/event-stream",
@@ -305,7 +315,7 @@ describe("McpProxy", () => {
             expect(toolReq.headers["mcp-session-id"]).toBe("session-xyz");
         });
         it("handles JSON content-type responses", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             handler = (_req, res) => {
                 const parsed = JSON.parse(requestLog[requestLog.length - 1].body);
                 if (parsed.method === "initialize") {
@@ -334,7 +344,7 @@ describe("McpProxy", () => {
     });
     describe("ensureSession", () => {
         it("throws on failed initialize", async () => {
-            const proxy = new McpProxy();
+            const proxy = new McpProxy(testPlatform);
             handler = (_req, res) => {
                 res.writeHead(503, { "Content-Type": "text/plain" });
                 res.end("Service Unavailable");

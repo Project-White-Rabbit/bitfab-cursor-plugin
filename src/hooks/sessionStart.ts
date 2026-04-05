@@ -1,17 +1,5 @@
-import { hasCredentials } from "../config.js"
+import { runSessionStart } from "bitfab-plugin-lib"
+import { platform } from "../platform.js"
+import { getVersion } from "../version.js"
 
-const messages: string[] = []
-
-try {
-  if (!hasCredentials()) {
-    messages.push(
-      `[Bitfab] Not authenticated. Run /bitfab-setup to connect your account and instrument your codebase.`,
-    )
-  }
-} catch {}
-
-if (messages.length > 0) {
-  process.stdout.write(
-    JSON.stringify({ systemMessage: `\n${messages.join("\n")}` }),
-  )
-}
+await runSessionStart(getVersion(), platform)
