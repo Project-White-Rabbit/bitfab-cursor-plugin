@@ -21,8 +21,8 @@ If a `traceFunctionKey` was provided as an argument, use it. Otherwise:
 
 1. Call `mcp__plugin_bitfab_Bitfab__list_trace_functions` to list all available trace functions
 2. For each function, include a brief description of what it does — infer from the function key name (e.g., `memory-search` → searches memories, `memory-extraction` → extracts memories from conversations). Keep descriptions to one sentence.
-3. Present the list to the user with names, descriptions, and evaluation stats (grader count, pass/fail numbers)
-4. Use `AskUserQuestion` to ask which one they want to improve — recommend the one with the most signal (graders + failures) — wait for their answer before continuing
+3. Present the full list to the user in the question text showing all functions with their keys and descriptions
+4. Use `AskUserQuestion` with just 2 options: the recommended function (pick the one with the most recent activity or traces) and a free-text "Type a function key" option. The user can see the full list above and either accept the recommendation or type their choice.
 
 ## Phase 2: Verify Instrumentation & Replay
 
@@ -37,13 +37,15 @@ Search the codebase for the trace function key to confirm SDK usage:
 - Ruby: `grep -r "<traceFunctionKey>" --include="*.rb"`
 - Go: `grep -r "<traceFunctionKey>" --include="*.go"`
 
-If the trace function key is NOT found in the codebase, use `AskUserQuestion` to ask the user:
+If the key is found, note the file location — this is the code you'll iterate on in later phases.
 
-> "I can't find instrumentation for `<traceFunctionKey>` in this codebase."
+If the key is NOT found in the codebase, the function is instrumented elsewhere (the traces exist on Bitfab). Use `AskUserQuestion` to ask:
+
+> "I can't find `<traceFunctionKey>` in this codebase — it may be instrumented in another repo or under a different key."
 >
-> Options: "Instrument now (Recommended)" — set up tracing inline / "Pick a different function" / "Stop"
+> Options: "Instrument now (Recommended)" — set up tracing in this codebase / "Continue anyway" — work with the traces even without local code / "Pick a different function" / "Stop"
 
-If the user chooses **"Instrument now"**, invoke `/bitfab-setup instrument`, then continue with Phase 2 Check Replay Script.
+If the user chooses **"Instrument now"**, invoke `/bitfab-setup instrument`, then continue with Phase 2 Check Replay Script. If **"Continue anyway"**, skip to Phase 3 (dataset building) since there's no local code to iterate on yet.
 
 ### Check Replay Script
 
@@ -51,6 +53,8 @@ Search for a replay script that covers this trace function:
 
 - Look for files matching `scripts/replay.*`, `scripts/*replay*`, or any file that imports `bitfab.replay` / `client.replay`
 - Read the script and check that it maps the target trace function key
+
+If a replay script exists but targets a different function key, do NOT modify the existing script or suggest changing the code's function key. Instead, treat it as "no replay script for this function" and offer to create a new one.
 
 If no replay script exists or it doesn't cover this function, use `AskUserQuestion` to ask the user:
 
@@ -60,17 +64,22 @@ If no replay script exists or it doesn't cover this function, use `AskUserQuesti
 
 If the user chooses **"Create replay now"**, invoke `/bitfab-setup replay`, then continue with Phase 3.
 
-## Phase 3: Build Dataset & Establish Expected Outcomes
+## Phase 3: Build Dataset via Labeling
 
-Build an in-context dataset of traces with approved expected outcomes. The user's judgment is the grader in v0 — this dataset becomes the benchmark for all experiments.
+Build a dataset of labeled traces. The user labels traces as pass/fail using the labeling UI and writes annotations describing what went wrong or what the correct output should be. These labels and annotations become the benchmark for all experiments.
 
-1. **Find traces** — Use `mcp__plugin_bitfab_Bitfab__search_traces` to find failed or interesting traces. Prioritize human-labeled failures, then automated grader failures with diagnostics, then recent traces with unusual outputs.
-2. **Present a trace** — Pick one notable trace. Call `mcp__plugin_bitfab_Bitfab__read_traces` with `scope: "full"`, then use `AskUserQuestion` to show the user the input and actual output.
-3. **Get the user's judgment** — Ask: is this a failure? If so, what should the correct output be? Record their expected outcome and reasoning.
-4. **Filter and update** — Drop or update traces and their expected outcomes based on the users feedback. Identify duplicates that may not be needed in the dataset after user feedback. This dataset is used by an intelligent agent so minor input discrepancies are often handled unlike training a model.
-5. **Repeat 1–4** Based on user feedback, you may start the loop at 1 or 2 until the dataset has enough approved traces to generate useful code fixes. Don't rush — one trace at a time keeps feedback focused.
-6. **Confirm the dataset** — Present the full list via `AskUserQuestion`: each entry showing (trace ID, actual output, expected outcome, user's reasoning). Get explicit approval before moving on.
-7. **Hold in-context** — This approved dataset is the benchmark for all experiments in Phase 5. Keep it in your working context throughout.
+1. **Gather already-labeled traces** — Use `mcp__plugin_bitfab_Bitfab__search_traces` with `labelSource: "human"` to find traces that already have human labels. These go directly into the dataset — no need to re-label.
+2. **Find unlabeled traces** — Search again without label filters to find unlabeled traces. Use `mcp__plugin_bitfab_Bitfab__read_traces` with `scope: "summary"` to read them and identify which are worth labeling — look for diverse inputs, traces that produced output (not empty), and traces that cover different scenarios. Filter out near-duplicates and uninteresting traces (e.g., trivial inputs, system commands).
+3. **Present candidates** — Use `AskUserQuestion` to show the user which unlabeled traces you recommend labeling and why. Include the already-labeled trace count for context (e.g., "4 traces already labeled, recommending 5 more for labeling"). Let the user approve, adjust, or skip.
+4. **Open the labeling UI** — Collect the approved trace IDs and run the label script to open the labeling page in the browser:
+   ```bash
+   node <plugin-dir>/dist/commands/label.js <traceId1> <traceId2> <traceId3> ...
+   ```
+   Where `<plugin-dir>` is the absolute path to the `bitfab-cursor-plugin` directory. This opens the labeling UI in the browser and blocks until the user finishes labeling. The user labels each trace as pass/fail/skip and writes annotations explaining what went wrong or what the expected output should be.
+5. **Wait for labeling to complete** — The label script blocks until the user finishes. It prints a summary when done (e.g., "Labeling complete: 8/10 traces labeled").
+6. **Build the dataset** — Combine the already-labeled traces (step 1) with the newly-labeled traces (step 5). Call `mcp__plugin_bitfab_Bitfab__read_traces` with all trace IDs and `scope: "full"` to get the full dataset with labels and annotations.
+7. **Confirm the dataset** — Present the dataset via `AskUserQuestion`: each entry showing (trace ID, label, annotation summary). The dataset must contain at least one failed trace — if all traces are passing, tell the user and go back to step 2 to find or label more traces. Get explicit approval before moving on.
+8. **Hold in-context** — This approved dataset is the benchmark for all experiments in Phase 5. Keep it in your working context throughout.
 
 ## Phase 4: Diagnose & Plan
 
@@ -89,9 +98,9 @@ Synthesize the failure patterns — what's going wrong, what the common threads 
 3. Identify **iteration targets**: prompts, system messages, parameters, preprocessing, postprocessing
 4. If BAML files are involved, read the relevant `.baml` files
 
-### Step 3: Analyze dataset discrepancy between actual and expected in dataset
+### Step 3: Categorize fixes based on failure annotations
 
-Based on the failure patterns, the code, and the approved dataset from Phase 3, categorize proposed changes into three buckets:
+Based on the failure patterns, the code, and the labeled dataset from Phase 3, categorize proposed changes into three buckets:
 
 **Bucket 1 — Code fixes**: Deterministic bugs (off-by-one, type mismatch, missing null check, wrong variable). These won't recur once fixed. Bundle all code fixes into a single experiment unless they are large feature changes. These are applied first as a foundation that all subsequent experiments build on.
 
@@ -109,7 +118,7 @@ Present the categorized plan via `AskUserQuestion`:
 >
 > - \[Proposal\]: \[What it would require, which traces it would help\]
 >
-> I'll replay each experiment against the approved dataset and compare outputs to the expected outcomes we agreed on."
+> I'll replay each experiment against the labeled dataset and evaluate using the annotations as acceptance criteria."
 
 Get the user's confirmation before proceeding.
 
@@ -125,7 +134,7 @@ Run an iterative improvement loop. Fork as many experiments that do not rely on 
 
 ### Step 2: Replay Against Dataset
 
-Collect the trace IDs from the approved dataset (Phase 3). Run the replay script with those specific traces.
+Collect the trace IDs from the labeled dataset (Phase 3). Run the replay script with those specific traces.
 
 ```bash
 # The exact command depends on the replay script — adapt to what exists
@@ -133,25 +142,24 @@ Collect the trace IDs from the approved dataset (Phase 3). Run the replay script
 cd <project-dir> && npx tsx scripts/replay.ts <pipeline-name> --trace-ids <id1>,<id2>,<id3>,...
 ```
 
-### Step 3: Evaluate Against Expected Outcomes
+### Step 3: Evaluate Against Labels & Annotations
 
-Read the replay output. Compare each trace's new output against the **expected outcomes approved in Phase 3**. For each trace in the dataset:
+Read the replay output. For each trace in the dataset, use the label (pass/fail) and annotation from Phase 3 to judge whether the new output is an improvement:
 
-- Does the new output match (or move closer to) the expected outcome?
-- Did any previously-passing traces regress?
-- Reason for any results changing?
+- For traces labeled **fail**: Does the new output address the issue described in the annotation? The annotation explains what went wrong — use it as the acceptance criteria.
+- For traces labeled **pass**: Did the replay preserve the correct behavior, or did it regress?
 - Record the results into a tmp file if the dataset/context is too big so you can recall it later easily.
 - Return the results of the sub agent if you are in one to the main agent.
 
 ### **Step 4: Share Results to the user**
 
-> "After N experiments these are the results: X/Y traces now match expected outcomes.
+> "After N experiments these are the results: X/Y traces now pass.
 >
-> - ✅ Trace `abc123`: Now matches expected — \[brief comparison\]
-> - ❌ Trace `def456`: Still diverges — expected \[X\], got \[Y\]
+> - ✅ Trace `abc123`: Now passes — \[how the annotation's issue was resolved\]
+> - ❌ Trace `def456`: Still failing — annotation said \[X\], output still \[Y\]
 > - ❌⚠️ Trace `ghi789`: Was passing, now failing (regression)"
 >
-> Show this across the full data set, and highlight the best out come concisely. Explain why it worked best with references to code, docs, and/or research if needed. For the best outcome:
+> Show this across the full data set, and highlight the best outcome concisely. Explain why it worked best with references to code, docs, and/or research if needed. For the best outcome:
 >
 > - **If pass rate improved and no regressions**: Use `AskUserQuestion` to ask the user if they want to keep iterating or stop
 > - **If pass rate improved but regressions exist or no improvement**: Use `AskUserQuestion` to tell the user and propose to create a plan for new experiments and continue iterating.
