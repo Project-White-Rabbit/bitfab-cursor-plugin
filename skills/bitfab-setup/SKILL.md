@@ -55,18 +55,20 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
 3. Use the API key from the Login phase (or retrieve it now if already authenticated)
 4. Install the SDK (if not already installed) and set the `BITFAB_API_KEY` environment variable
 5. Call `mcp__plugin_bitfab_Bitfab__setup_bitfab` with the detected language to get the SDK guide. Read it carefully.
-6. Read the codebase to identify ALL AI workflows — every place the app makes LLM calls, runs agents, or makes AI-driven decisions
-7. Present a numbered list of workflows found, ordered by value (most complex or LLM-heavy first). For each: function name, brief description, why tracing it is valuable. Recommend one to start with. Ask which to instrument: a number, multiple numbers, or "all".
-8. **Read every function** that will appear in the trace plan (instrumented or skipped). Extract exact parameter names and return type fields from source code. See "Trace Plan Format" and "Trace Plan Accuracy" in the Reference section below.
-9. Present the trace plan and **STOP** — use AskUserQuestion to confirm before writing code.
-10. Instrument following the SDK guide exactly — purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure.
-11. Tell the user how to run the app to generate the first trace — give exact command(s). Do NOT run it yourself.
-12. After each workflow, use AskUserQuestion for next steps:
-    > We recommend **A**: instrument [next workflow] — [one-line reason].
+6. When deciding what the root of a trace function should be, you should target a common ancestor for an entire agents activity across many prompts, tools, and context.
+7. Read the codebase to identify ALL AI workflows — every place the app makes LLM calls, runs agents, or makes AI-driven decisions
+8. Present a numbered list of workflows found, ordered by value (most complex or LLM-heavy first). For each: function name, brief description, why tracing it is valuable. Recommend one to start with. Ask which to instrument: a number, multiple numbers, or "all".
+9. **Read every function** that will appear in the trace plan (instrumented or skipped). Extract exact parameter names and return type fields from source code. See "Trace Plan Format" and "Trace Plan Accuracy" in the Reference section below.
+10. Present the trace plan **using the format defined in the "Trace Plan Format" reference section below** (legend → grammar → template precedence → canonical example). Then **STOP** — use AskUserQuestion to confirm before writing code.
+11. Instrument following the SDK guide exactly — purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure.
+12. Tell the user how to run the app to generate the first trace — give exact command(s). Do NOT run it yourself.
+13. After each workflow, check whether traces already exist for the current trace function key by calling `mcp__plugin_bitfab_Bitfab__search_traces` (or `list_trace_functions`). Only offer the "Generate traces" option if **no traces exist yet** for that key — if traces already exist, skip option A and recommend instrumenting the next workflow instead. Use AskUserQuestion for next steps:
+    > We recommend **A**: generate traces before instrumenting the next workflows - [one-line reason].
     >
-    > A) **Instrument [next workflow]** — [why it's the next highest value]
-    > B) **Instrument [other workflow]** — [alternative]
-    > C) **Done** — stop here
+    > A) **Generate traces [current workflow]** — [present the script to run to the user. Allow them to let you to run it for them.] *(omit if traces already exist)*
+    > B) **Instrument [next workflow]** — [why it's the next highest value]
+    > C) **Instrument [other workflow]** — [alternative]
+    > D) **Done** — stop here
 
     If A or B, return to step 8 for the selected workflow. If C, proceed.
 
@@ -105,9 +107,51 @@ These sections are consulted during the Instrument phase — not executed sequen
 
 ### Trace Plan Format
 
-Present the plan as a compact tree diagram. Default view shows only instrumented (●) spans. Type goes inline in parentheses. Lines terminate at the last child. No descriptions, counts, or blank lines between siblings.
+The trace plan is a strict format. Do not improvise — follow the legend, grammar, and template selection rule below. When in doubt, copy the matching canonical example verbatim and substitute names.
 
-**Default view** (instrumented only):
+#### Legend
+
+| Symbol | Meaning | Where it appears |
+|---|---|---|
+| `●` | Instrumented span | Default + Expanded + Processor views |
+| `○` | Skipped function (not instrumented) | Expanded view only |
+| `[root]` | Literal label for the trace function entry point | Always, on its own line above the tree |
+| `[loop]` | Control-flow group: children execute in a loop | Inside the tree, in place of a span |
+| `[branch]` | Control-flow group: children are conditional branches | Inside the tree, in place of a span |
+| `[parallel]` | Control-flow group: children execute concurrently | Inside the tree, in place of a span |
+| `[auto]` | Auto-captured by a trace processor — no manual instrumentation | Trace-processor view only |
+| `(function)` `(llm)` `(tool)` `(agent)` `(handoff)` | Span type annotation | Immediately after every `●` span name |
+
+Brackets `[…]` are structural labels (not spans). Parens `(…)` are span type annotations (only on `●` lines).
+
+#### Grammar rules
+
+1. **Header line** — exactly: `Trace function: "<trace-function-key>"` followed by one blank line.
+2. **Root** — the next line is the literal `[root]`, with no symbol prefix.
+3. **Tree body** — uses box-drawing characters only:
+   - `├─` for every child except the last
+   - `└─` for the last child
+   - Children of a `├─` node indent with `│  ` (pipe + two spaces)
+   - Children of a `└─` node indent with `   ` (three spaces, no pipe)
+4. **Span lines** — `<prefix>● <name> (<type>)`. Type annotation is **required** on every `●` line.
+5. **Skipped lines** — `<prefix>○ <name>`. No type annotation, no description.
+6. **Control-flow lines** — `<prefix>[loop]` / `[branch]` / `[parallel]`. They take children but have no symbol and no type.
+7. **Footer** — one blank line, then either:
+   - `Files changed:` followed by a numbered list (manual instrumentation), OR
+   - `Setup: <one-line setup description>` (trace processor only)
+8. **No descriptions, no counts, no parameter details, no blank lines between siblings, no trailing whitespace.**
+
+#### Which template to use (precedence — check top to bottom, stop at first match)
+
+1. **Trace processor template** — if the SDK guide says to register a processor (e.g. OpenAI Agents SDK `addTraceProcessor`). Children of the root span are auto-captured and shown as `[auto]` lines.
+2. **Expanded view** — only if the user explicitly asks ("show details", "expand", "include skipped"), or selects "Expand details" from the AskUserQuestion preview.
+3. **Default view** — every other case. This is the recommended default.
+
+Never mix templates. Never invent a fourth variant.
+
+#### Canonical examples (copy-edit-substitute, do not restructure)
+
+**Default view** — instrumented spans only:
 
 ```
 Trace function: "<trace-function-key>"
@@ -124,7 +168,7 @@ Files changed:
   2. pipeline.ts
 ```
 
-**Expanded view** adds skipped (○) in true execution order, plus the legend. No parameter details.
+**Expanded view** — adds skipped (○) functions in true execution order:
 
 ```
 Trace function: "<trace-function-key>"
@@ -146,20 +190,42 @@ Files changed:
   2. pipeline.ts
 ```
 
-**Trace processor** (e.g., OpenAI Agents SDK) — auto-captured internals:
+The legend line `● instrumented   ○ skipped` appears **only** in the expanded view, immediately under the header.
+
+**Trace-processor view** — auto-captured internals:
 
 ```
 Trace function: "my-agent"
 
 [root]
 ● runAgent (function)
-   ├─ LLM calls    [auto]
-   ├─ tool calls   [auto]
-   └─ handoffs     [auto]
+├─ LLM calls    [auto]
+├─ tool calls   [auto]
+└─ handoffs     [auto]
+
 Setup: addTraceProcessor(processor) registered at startup
 ```
 
-Use AskUserQuestion with previews: **"Proceed"** (recommended, default view), **"Expand details"** (expanded view), **"Adjust"**.
+The `[auto]` lines are not spans — they describe what the processor will capture. They use `├─`/`└─` like normal children but carry no `●`/`○` symbol.
+
+#### Anti-examples (do NOT do these)
+
+- ❌ `* outerFunction (function)` — use `●`, never `*` or `-` or `•`
+- ❌ `● outerFunction` — type annotation is mandatory on every instrumented span
+- ❌ `● outerFunction (function) — calls the LLM with retries` — no descriptions, no em dashes
+- ❌ `● outerFunction (llm-call)` — only the listed types are valid; do not invent new ones
+- ❌ `[Root]` or `[ROOT]` — literal label is lowercase `[root]`
+- ❌ Mixed indentation widths (2 spaces in one branch, 4 in another)
+- ❌ Blank lines between siblings inside the tree
+- ❌ Adding `Files changed:` to the trace-processor view, or omitting it from default/expanded
+- ❌ Inventing extra sections like `Notes:` or `Estimated coverage:`
+
+#### Presentation step
+
+After building the plan according to the rules above, use AskUserQuestion with these three options:
+- **Proceed** (recommended) — accept the default view as shown
+- **Expand details** — re-render using the expanded view template
+- **Adjust** — user wants changes; ask what
 
 ### Trace Plan Accuracy
 
