@@ -7,7 +7,7 @@ description: "Improve a traced function with Bitfab. Usage: /bitfab-improve <tra
 
 Use the **local plugin MCP tools** (`mcp__plugin_bitfab_Bitfab__*`) to find what's failing in a traced function, gather labeled failed traces, then iterate on the code/prompts using replay until pass rates improve.
 
-**MCP tools:** This skill uses `list_trace_functions`, `search_traces`, and `read_traces` from the **local plugin MCP server** (bundled with this plugin). Do NOT use the remote Bitfab MCP tools (`mcp__Simforge__*` or `mcp__Bitfab__*`) — use only the `mcp__plugin_bitfab_Bitfab__*` variants.
+**MCP tools:** This skill uses `list_trace_functions`, `search_traces`, `read_traces`, and `save_agent_labels` from the **local plugin MCP server** (bundled with this plugin). Do NOT use the remote Bitfab MCP tools (`mcp__Simforge__*` or `mcp__Bitfab__*`) — use only the `mcp__plugin_bitfab_Bitfab__*` variants.
 
 **Always use** `AskUserQuestion` **when asking questions, reporting results, or presenting choices.** Never print a question as text and wait. Rules:
 
@@ -66,20 +66,23 @@ If the user chooses **"Create replay now"**, invoke `/bitfab-setup replay`, then
 
 ## Phase 3: Build Dataset via Labeling
 
-Build a dataset of labeled traces. The user labels traces as pass/fail using the labeling UI and writes annotations describing what went wrong or what the correct output should be. These labels and annotations become the benchmark for all experiments.
+Build a dataset of labeled traces. **You** (the agent) label every candidate trace with your best-guess pass/fail verdict and a written annotation BEFORE the user ever sees the labeling UI. The user's job is to confirm or correct your verdicts, not to label from scratch. These labels and annotations become the benchmark for all experiments.
+
+> 🚨 **HARD RULE — DO NOT SKIP:** You MUST call `mcp__plugin_bitfab_Bitfab__save_agent_labels` with verdicts for every approved trace BEFORE running `label.js` to open the UI. Sending the user into the labeling UI without pre-labeled verdicts is a process violation. If you find yourself about to run `label.js` and you have not yet called `save_agent_labels` for those trace IDs, STOP and label them first. This is non-negotiable — do not ask permission, do not "save time" by skipping, do not defer to the user.
 
 1. **Gather already-labeled traces** — Use `mcp__plugin_bitfab_Bitfab__search_traces` with `labelSource: "human"` to find traces that already have human labels. These go directly into the dataset — no need to re-label.
 2. **Find unlabeled traces** — Search again without label filters to find unlabeled traces. Use `mcp__plugin_bitfab_Bitfab__read_traces` with `scope: "summary"` to read them and identify which are worth labeling — look for diverse inputs, traces that produced output (not empty), and traces that cover different scenarios. Filter out near-duplicates and uninteresting traces (e.g., trivial inputs, system commands).
 3. **Present candidates** — Use `AskUserQuestion` to show the user which unlabeled traces you recommend labeling and why. Include the already-labeled trace count for context (e.g., "4 traces already labeled, recommending 5 more for labeling"). Let the user approve, adjust, or skip.
-4. **Open the labeling UI** — Collect the approved trace IDs and run the label script to open the labeling page in the browser:
+4. **Label them yourself FIRST (mandatory before step 5)** — Once the user approves the candidate traces, **you** label them. Call `mcp__plugin_bitfab_Bitfab__read_traces` with `scope: "full"` on the approved trace IDs (batch them — up to 10 per call), read each trace's inputs / output / spans yourself, and decide for each one whether it looks like a PASS or a FAIL. **Ground your judgment in the codebase, not just the trace text.** Before you start labeling, read the instrumented function in the user's source (you found it in Phase 2) and any nearby code that explains intent — comments, docstrings, README sections, related tests, BAML files — so you know what the function is *supposed* to do and what "good" looks like for it. Apply the same context to every trace: does this output achieve the function's goal as expressed in the code? Does it match the patterns in the already-labeled traces? Then call `mcp__plugin_bitfab_Bitfab__save_agent_labels` once with an array of `{ traceId, label, annotation }` objects — **both `label` (true for pass, false for fail) and `annotation` (a one-or-two-sentence explanation written for the human reviewer, ideally referencing what the code is trying to do) are required for every trace**. Commit to a verdict — if you genuinely cannot decide, you didn't read the trace or the code carefully enough. This is your best guess, not a substitute for the human — they will see your verdicts as one-click suggestions in the labeling UI and can accept, change, or ignore each one. Do not skip this step, do not ask permission first, and do not advance to step 5 until `save_agent_labels` has returned successfully for every approved trace.
+5. **Open the labeling UI (only after step 4 is done)** — Collect the approved trace IDs and run the label script to open the labeling page in the browser:
    ```bash
    node <plugin-dir>/dist/commands/label.js <traceId1> <traceId2> <traceId3> ...
    ```
    Where `<plugin-dir>` is the absolute path to the `bitfab-cursor-plugin` directory. This opens the labeling UI in the browser and blocks until the user finishes labeling. The user labels each trace as pass/fail/skip and writes annotations explaining what went wrong or what the expected output should be.
-5. **Wait for labeling to complete** — The label script blocks until the user finishes. It prints a summary when done (e.g., "Labeling complete: 8/10 traces labeled").
-6. **Build the dataset** — Combine the already-labeled traces (step 1) with the newly-labeled traces (step 5). Call `mcp__plugin_bitfab_Bitfab__read_traces` with all trace IDs and `scope: "full"` to get the full dataset with labels and annotations.
-7. **Confirm the dataset** — Present the dataset via `AskUserQuestion`: each entry showing (trace ID, label, annotation summary). The dataset must contain at least one failed trace — if all traces are passing, tell the user and go back to step 2 to find or label more traces. Get explicit approval before moving on.
-8. **Hold in-context** — This approved dataset is the benchmark for all experiments in Phase 5. Keep it in your working context throughout.
+6. **Wait for labeling to complete** — The label script blocks until the user finishes. It prints a summary when done (e.g., "Labeling complete: 8/10 traces labeled").
+7. **Build the dataset** — Combine the already-labeled traces (step 1) with the newly-labeled traces (step 6). Call `mcp__plugin_bitfab_Bitfab__read_traces` with all trace IDs and `scope: "full"` to get the full dataset with labels and annotations.
+8. **Confirm the dataset** — Present the dataset via `AskUserQuestion`: each entry showing (trace ID, label, annotation summary). The dataset must contain at least one failed trace — if all traces are passing, tell the user and go back to step 2 to find or label more traces. Get explicit approval before moving on.
+9. **Hold in-context** — This approved dataset is the benchmark for all experiments in Phase 5. Keep it in your working context throughout.
 
 ## Phase 4: Diagnose & Plan
 
