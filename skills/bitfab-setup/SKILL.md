@@ -57,9 +57,9 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
 5. Call `mcp__plugin_bitfab_Bitfab__setup_bitfab` with the detected language to get the SDK guide. Read it carefully.
 6. When deciding what the root of a trace function should be, you should target a common ancestor for an entire agents activity across many prompts, tools, and context.
 7. Read the codebase to identify ALL AI workflows — every place the app makes LLM calls, runs agents, or makes AI-driven decisions
-8. Present a numbered list of workflows found, ordered by value (most complex or LLM-heavy first). For each: function name, brief description, why tracing it is valuable. Recommend one to start with. Ask which to instrument: a number, multiple numbers, or "all".
+8. Present a numbered list of workflows found, ordered by value (most complex or LLM-heavy first). For each: function name, brief description, why tracing it is valuable. Recommend one to start with. **Ask the user to pick exactly ONE workflow to instrument first.** Never accept "multiple" or "all" — each Instrument cycle produces exactly one trace function with one trace plan and one set of code changes. If the user wants to instrument several, they will be done sequentially via the loop in step 13, one at a time.
 9. **Read every function** that will appear in the trace plan (instrumented or skipped). Extract exact parameter names and return type fields from source code. See "Trace Plan Format" and "Trace Plan Accuracy" in the Reference section below.
-10. Present the trace plan **using the format defined in the "Trace Plan Format" reference section below** (legend → grammar → template precedence → canonical example). Then **STOP** — use AskUserQuestion to confirm before writing code.
+10. **Build the trace plan under a hard constraint: the resulting instrumentation must be purely additive.** If a candidate tree requires *any* behavior change to make spans nest correctly (awaiting a stream that wasn't awaited, delaying a call, reordering operations, blocking a callback, restructuring control flow), the tree is invalid — restructure the *tree* instead (make spans siblings, split into separate trace functions across separate cycles, or accept a flatter shape). Never present a behavior-changing approach as an option, not even as a non-recommended alternative. Then present the trace plan **using the format defined in the "Trace Plan Format" reference section below** (legend → grammar → template precedence → canonical example). **STOP** — use AskUserQuestion to confirm before writing code.
 11. Instrument following the SDK guide exactly — purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure.
 12. Tell the user how to run the app to generate the first trace — give exact command(s). Do NOT run it yourself.
 13. After each workflow, check whether traces already exist for the current trace function key by calling `mcp__plugin_bitfab_Bitfab__search_traces` (or `list_trace_functions`). Only offer the "Generate traces" option if **no traces exist yet** for that key — if traces already exist, skip option A and recommend instrumenting the next workflow instead. Use AskUserQuestion for next steps:
@@ -140,6 +140,7 @@ Brackets `[…]` are structural labels (not spans). Parens `(…)` are span type
    - `Files changed:` followed by a numbered list (manual instrumentation), OR
    - `Setup: <one-line setup description>` (trace processor only)
 8. **No descriptions, no counts, no parameter details, no blank lines between siblings, no trailing whitespace.**
+9. **One trace function per plan.** A trace plan describes exactly one trace function — exactly one `Trace function: "..."` header, exactly one `[root]`, exactly one tree, exactly one `Files changed:` section. If the cycle would require instrumenting two trace functions, that's two cycles, not one plan with two trees.
 
 #### Which template to use (precedence — check top to bottom, stop at first match)
 
@@ -219,6 +220,12 @@ The `[auto]` lines are not spans — they describe what the processor will captu
 - ❌ Blank lines between siblings inside the tree
 - ❌ Adding `Files changed:` to the trace-processor view, or omitting it from default/expanded
 - ❌ Inventing extra sections like `Notes:` or `Estimated coverage:`
+- ❌ Two `Trace function: "..."` headers in one plan — split into two cycles
+- ❌ `● someFn (llm)   ← description here` — no inline descriptions, arrows, or trailing commentary on span lines
+- ❌ `● <kind>DocumentCreate (llm)` — no placeholder/template span names; expand to concrete spans (e.g., three siblings, or under a `[branch]`)
+- ❌ `Files changed` without the trailing colon
+- ❌ `1. lib/bitfab.ts (new) — Bitfab client + exported pipelines` — file entries are paths only, no annotations or descriptions
+- ❌ Recommending an approach that requires "a tiny behavior change" — disqualified at trace plan construction; restructure the tree instead
 
 #### Presentation step
 
