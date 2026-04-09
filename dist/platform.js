@@ -7,4 +7,7 @@ export const platform = {
     cliBinary: "cursor",
     displayName: "Cursor",
     supportsAutoUpdate: false,
+    marketplaceName: "bitfab",
+    pluginName: "bitfab",
+    marketplacePreRegistered: false,
 };
