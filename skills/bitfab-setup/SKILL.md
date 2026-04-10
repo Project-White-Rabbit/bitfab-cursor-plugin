@@ -50,7 +50,7 @@ Use this flow when the browser callback can't reach the terminal — SSH session
 
 1. Determine the service URL. Default is `https://bitfab.ai`. If the user has a custom deployment, read it from `~/.config/bitfab/config.json` (field `serviceUrl`) or the `BITFAB_SERVICE_URL` environment variable.
 2. Tell the user:
-   > Open this URL in a browser on any device: **{serviceUrl}/auth/cursor**
+   > Open this URL in a browser on any device: **{serviceUrl}/plugin/auth/cursor**
    >
    > Sign in with your Bitfab account. The page will show an API key with a copy button. Paste the token here when you have it.
 3. Wait for the user's next message — it will contain the token. Do NOT use `AskUserQuestion` here (it adds an unnecessary extra step before the user can paste).
