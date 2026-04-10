@@ -1,6 +1,6 @@
 ---
 name: bitfab-setup
-description: "Set up Bitfab tracing. Usage: /bitfab-setup [all|login|instrument|replay]"
+description: "Set up Bitfab tracing. Usage: /bitfab-setup [all|login|login headless|instrument|replay]"
 ---
 
 # Bitfab Setup
@@ -17,7 +17,8 @@ This skill has three phases: **login**, **instrument**, and **replay**. Run indi
 | Invocation | Action |
 |---|---|
 | `/bitfab-setup` or `/bitfab-setup all` | Run all three phases in order |
-| `/bitfab-setup login` | Authenticate and retrieve API key |
+| `/bitfab-setup login` | Authenticate via browser OAuth and retrieve API key |
+| `/bitfab-setup login headless` | Authenticate by pasting a token (no browser callback needed) |
 | `/bitfab-setup instrument` | Instrument AI workflows with Bitfab tracing |
 | `/bitfab-setup replay` | Create or update replay scripts for instrumented workflows |
 
@@ -31,14 +32,45 @@ Authenticate with Bitfab and retrieve the API key.
    ```bash
    node "${CURSOR_PLUGIN_ROOT}/dist/commands/status.js"
    ```
-   If **"not authenticated"**, run the login script yourself — do NOT ask the user to run it manually:
+   If **already authenticated**, skip to step 3.
+2. If **"not authenticated"**, run the login script yourself — do NOT ask the user to run it manually:
    ```bash
    node "${CURSOR_PLUGIN_ROOT}/dist/commands/login.js"
    ```
-   This opens the browser for OAuth and waits for the callback (up to 2 minutes). Run with 150000ms timeout. After success, confirm and continue.
-2. Call `mcp__plugin_bitfab_Bitfab__get_bitfab_api_key` to retrieve the API key — **NEVER print or log the full key**. Stored at `~/.config/bitfab/credentials.json`, used for the `BITFAB_API_KEY` environment variable.
+   This opens the browser for OAuth and waits for the loopback callback. Run with 600000ms timeout (10 minutes). If the command **exits with an error**, **fails to reach the browser**, or **times out** — fall through to the **Login (headless)** flow below. This commonly happens on SSH sessions, sandboxed environments, cloud IDEs, and Codespaces where the browser can't reach the CLI's loopback port.
+3. Call `mcp__plugin_bitfab_Bitfab__get_bitfab_api_key` to retrieve the API key — **NEVER print or log the full key**. Stored at `~/.config/bitfab/credentials.json`, used for the `BITFAB_API_KEY` environment variable.
 
 **If running `login` only**, stop here and report the result.
+
+---
+
+## Login (headless)
+
+Use this flow when the browser callback can't reach the terminal — SSH sessions, sandboxed environments, cloud IDEs, Codespaces, CI runners. Triggered explicitly by `/bitfab-setup login headless`, or as an automatic fallback when the normal Login flow above fails.
+
+1. Determine the service URL. Default is `https://bitfab.ai`. If the user has a custom deployment, read it from `~/.config/bitfab/config.json` (field `serviceUrl`) or the `BITFAB_SERVICE_URL` environment variable.
+2. Tell the user:
+   > Open this URL in a browser on any device: **{serviceUrl}/auth/cursor**
+   >
+   > Sign in with your Bitfab account. The page will show an API key with a copy button. Paste the token here when you have it.
+3. Wait for the user's next message — it will contain the token. Do NOT use `AskUserQuestion` here (it adds an unnecessary extra step before the user can paste).
+4. When the user pastes the token, validate it with curl — do NOT echo the token back to the user or print it in any output:
+   ```bash
+   curl -fsS -H "Authorization: Bearer <TOKEN>" "{serviceUrl}/api/plugin/whoami"
+   ```
+   If this returns 200 with a JSON body containing `user.email`, the token is valid. If it fails, tell the user the token was invalid and ask them to re-paste (do not re-print the bad token).
+5. Save the token to `~/.config/bitfab/credentials.json` using the `Write` tool with this exact content (replace `<TOKEN>` with the pasted value, nothing else):
+   ```json
+   {
+     "apiKey": "<TOKEN>"
+   }
+   ```
+   Create the `~/.config/bitfab/` directory first if it doesn't exist:
+   ```bash
+   mkdir -p ~/.config/bitfab
+   ```
+6. Confirm success to the user by referencing the email returned from `/api/plugin/whoami` — e.g. "Signed in as alice@example.com." **Never echo the token back.**
+7. Continue with the rest of setup, or stop if running `login headless` only.
 
 ---
 
