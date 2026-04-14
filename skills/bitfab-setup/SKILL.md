@@ -90,11 +90,11 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
 6. When deciding what the root of a trace function should be, you should target a common ancestor for an entire agents activity across many prompts, tools, and context.
 7. Read the codebase to identify ALL AI workflows — every place the app makes LLM calls, runs agents, or makes AI-driven decisions
 8. Present a numbered list of workflows found, ordered by value (most complex or LLM-heavy first). For each: function name, brief description, why tracing it is valuable. Recommend one to start with. **Ask the user to pick exactly ONE workflow to instrument first.** Never accept "multiple" or "all" — each Instrument cycle produces exactly one trace function with one trace plan and one set of code changes. If the user wants to instrument several, they will be done sequentially via the loop in step 13, one at a time.
-9. **Read every function** that will appear in the trace plan (instrumented or skipped). Extract exact parameter names and return type fields from source code. See "Trace Plan Format" and "Trace Plan Accuracy" in the Reference section below.
+9. **Read function signatures you'll reference in the trace plan** — root function first, then any whose parameter names or return fields aren't already obvious from the step 7 scan. Skipped leaf functions only need their names; don't Read them unless their shape appears in the plan. Never guess names. See "Trace Plan Format" and "Trace Plan Accuracy" in the Reference section below.
 10. **Build the trace plan under a hard constraint: the resulting instrumentation must be purely additive.** If a candidate tree requires *any* behavior change to make spans nest correctly (awaiting a stream that wasn't awaited, delaying a call, reordering operations, blocking a callback, restructuring control flow), the tree is invalid — restructure the *tree* instead (make spans siblings, split into separate trace functions across separate cycles, or accept a flatter shape). Never present a behavior-changing approach as an option, not even as a non-recommended alternative. Then present the trace plan **using the format defined in the "Trace Plan Format" reference section below** (legend → grammar → template precedence → canonical example). **STOP** — use AskUserQuestion to confirm before writing code.
-11. Instrument following the SDK guide exactly — purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure.
+11. Instrument following the SDK guide exactly — purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure. Batch repetitive edits in parallel (one message, many edit calls); for large mechanical fan-outs (>10 files of the same wrapper pattern), validate the pattern on one file, then delegate the rest to a subagent.
 12. Tell the user how to run the app to generate the first trace — give exact command(s). Do NOT run it yourself.
-13. After each workflow, check whether traces already exist for the current trace function key by calling `mcp__plugin_bitfab_Bitfab__search_traces` (or `list_trace_functions`). Only offer the "Generate traces" option if **no traces exist yet** for that key — if traces already exist, skip option A and recommend instrumenting the next workflow instead. Use AskUserQuestion for next steps:
+13. **MANDATORY STOP — never jump straight to Replay or silently end the cycle.** Check whether traces already exist for the current trace function key via `mcp__plugin_bitfab_Bitfab__search_traces` (or `list_trace_functions`) — the **only** place the skill calls these tools. An empty result is expected (the user hasn't run the app yet) and means "offer option A," not "skip step 13." Then use AskUserQuestion:
     > We recommend **A**: generate traces before instrumenting the next workflows - [one-line reason].
     >
     > A) **Generate traces [current workflow]** — [present the script to run to the user. Allow them to let you to run it for them.] *(omit if traces already exist)*
@@ -102,15 +102,13 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
     > C) **Instrument [other workflow]** — [alternative]
     > D) **Done** — stop here
 
-    If A or B, return to step 8 for the selected workflow. If C, proceed.
-
-**If running `instrument` only**, stop here after instrumentation is complete.
+    A, B, and C all return to step 8 for the selected workflow. Only D exits the Instrument loop. After D, if invoked in `all` mode, proceed to Replay; otherwise stop.
 
 ---
 
 ## Replay
 
-Create or update replay scripts for instrumented trace functions. Requires instrumentation to be present in the codebase.
+Create or update replay scripts for instrumented trace functions. Requires instrumentation in the codebase; does **not** require existing traces — replay scripts are created from trace function keys in the code, not captured trace data.
 
 Replay scripts let the team regression-test any trace function against production data with one command — they fetch historical traces, re-run them through the current code, and report old vs. new outputs side-by-side. Each SDK has its own replay API (e.g., `bitfab.replay()` in TypeScript, `client.replay()` in Python, `client.replay` in Ruby, `client.Replay()` in Go).
 
@@ -126,7 +124,12 @@ For replay API details, call `mcp__plugin_bitfab_Bitfab__setup_bitfab` with the 
    - Accept a pipeline name as a CLI argument
    - Accept optional `--limit N` (default 10) and `--trace-ids id1,id2` flags
    - Map pipeline names to trace function keys and their replay functions
-   - Use a per-pipeline replay function for each trace function (replay deserializes historical inputs — if the function signature doesn't match the raw input shape, the wrapper reshapes arguments)
+   - **Each pipeline's replay function MUST import and call the actual instrumented function** — never a stub or identity function. If the function signature doesn't match the raw input shape, reshape arguments in the wrapper.
+   - **If the instrumented function is factory-created** (takes session, stream writers, config via closure), call the factory in the wrapper with mocks:
+     - Stream/socket writers: no-op (`{ write: () => {}, merge: () => {} }`)
+     - Auth/session objects: minimal mock with the fields the function reads
+     - Model IDs / config: sensible default or env var
+     - DB-dependent functions: note in usage comment that a running DB is required
    - Call the SDK's replay API and print results with delta summaries
    - Print a summary (total replayed, same, changed, errors) and the test run URL
    - Live in a `scripts/` directory (or the project's existing scripts location)
@@ -268,4 +271,4 @@ After building the plan according to the rules above, use AskUserQuestion with t
 
 ### Trace Plan Accuracy
 
-Read every function in the trace plan (instrumented or skipped) using the `Read` tool. Extract exact parameter names and return types from source code — never guess.
+Read function signatures with the `Read` tool when the trace plan will reference their parameter names or return fields. Skipped leaf functions can be named from grep results if their shape isn't exposed in the plan. Never guess names that appear in the plan.

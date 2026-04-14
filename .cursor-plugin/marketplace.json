@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Bitfab LLM evaluation tools for Cursor — trace inspection, grader management, and diagnostics via MCP",
-    "version": "0.1.28"
+    "version": "0.1.29"
   },
   "plugins": [
     {
       "name": "bitfab",
       "source": "./",
       "description": "Bitfab LLM evaluation tools for Cursor — trace inspection, grader management, and diagnostics via MCP",
-      "version": "0.1.28",
+      "version": "0.1.29",
       "homepage": "https://github.com/Project-White-Rabbit/bitfab-cursor-plugin",
       "repository": "https://github.com/Project-White-Rabbit/bitfab-cursor-plugin",
       "license": "MIT",
