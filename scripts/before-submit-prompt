@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT="${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}}"
+
+if [ -n "${NODE_OPTIONS:-}" ]; then
+  unset NODE_OPTIONS
+fi
+
+if [ -n "${NODE_BIN:-}" ] && [ -x "${NODE_BIN}" ]; then
+  exec "${NODE_BIN}" "$ROOT/dist/hooks/userPromptSubmit.js" "$@"
+fi
+
+if command -v node >/dev/null 2>&1; then
+  exec node "$ROOT/dist/hooks/userPromptSubmit.js" "$@"
+fi
+
+exit 0

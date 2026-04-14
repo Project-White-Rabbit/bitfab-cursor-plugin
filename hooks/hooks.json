@@ -22,6 +22,18 @@
           }
         ]
       }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CURSOR_PLUGIN_ROOT}/scripts/before-submit-prompt",
+            "async": true
+          }
+        ]
+      }
     ]
   }
 }
