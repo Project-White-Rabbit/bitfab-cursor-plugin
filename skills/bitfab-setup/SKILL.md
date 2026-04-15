@@ -12,7 +12,9 @@ description: "Set up Bitfab tracing. Usage: /bitfab-setup [all|login|login headl
 
 This skill has three phases: **login**, **instrument**, and **replay**. Run individually or all at once.
 
-**MCP tools:** This skill uses `setup_bitfab` and `get_bitfab_api_key` from the **local plugin MCP server** (bundled with this plugin). Do NOT use the remote Bitfab MCP tools (`mcp__Simforge__*` or `mcp__Bitfab__*`) — use only the `mcp__plugin_bitfab_Bitfab__*` variants.
+**SDK reference:** https://docs.bitfab.ai is the source of truth for SDK install, initialization, API surface, and replay. Fetch the language-specific page (`/typescript-sdk`, `/python-sdk`, `/ruby-sdk`, `/go-sdk`) before writing instrumentation or replay code — do not improvise from memory.
+
+**MCP tools:** This skill uses `get_bitfab_api_key` from the **local plugin MCP server** (bundled with this plugin). Do NOT use the remote Bitfab MCP tools (`mcp__Simforge__*` or `mcp__Bitfab__*`) — use only the `mcp__plugin_bitfab_Bitfab__*` variants.
 
 | Invocation | Action |
 |---|---|
@@ -86,7 +88,7 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
    - If not found: **proceed to step 3** — no SDK usage does NOT mean nothing to instrument, it means the SDK hasn't been installed yet. NEVER conclude "nothing to instrument" before completing step 6.
 3. Use the API key from the Login phase (or retrieve it now if already authenticated)
 4. Install the SDK (if not already installed) and set the `BITFAB_API_KEY` environment variable
-5. Call `mcp__plugin_bitfab_Bitfab__setup_bitfab` with the detected language to get the SDK guide. Read it carefully.
+5. **Read the SDK reference** at https://docs.bitfab.ai/<language>-sdk (TypeScript: `/typescript-sdk`, Python: `/python-sdk`, Ruby: `/ruby-sdk`, Go: `/go-sdk`). Fetch with WebFetch or ask the user to share the page. This is the source of truth for install commands, initialization, the `withSpan` / `@span` / `bitfab_span` / `client.Span` API surface, span types, and replay. **Do not improvise instrumentation from memory** — the API has moved and guessing will produce broken code. If you need anything else about the SDK, https://docs.bitfab.ai is where to find it.
 6. When deciding what the root of a trace function should be, you should target a common ancestor for an entire agent's activity across many prompts, tools, and context. The root is the **outer workflow function** that owns the AI behavior end-to-end (API handler, message processor, job runner, pipeline coordinator) — almost never the LLM call or the agent SDK's `run()` itself. If the workflow wraps an SDK agent call (e.g. OpenAI Agents SDK), the root is the caller that prepares input → invokes the agent → processes the output → returns to the caller, NOT the agent call.
 
     **Hard constraint: the root's inputs must be serializable by the SDK's tracing layer so traces can be replayed.** Every span input and output gets serialized into the trace using the SDK's language-native serialization (TypeScript/JSON, Python/JSON via Pydantic, Ruby/`to_json`, Go/`json.Marshal`). If the outer workflow function takes live runtime objects that don't round-trip through that serialization — browser objects (`MediaStream`, `RTCPeerConnection`, `WebSocket`, DOM refs), HTTP `Request`/`Response`, stream writers, open sockets, or framework request contexts whose content is genuinely opaque (not reconstructible from headers + user id) — the trace can't be replayed. Module-level dependencies (DB clients, env vars, config loaders) do **not** count — replay inherits them from the app's loaded environment. When the natural outer boundary has unserializable inputs, do **one** of the following **before writing code**:
@@ -112,7 +114,7 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
     **For trace processor SDKs (OpenAI Agents SDK, etc.) — extend beyond the processor.** The processor only auto-captures what runs *inside* the SDK's instrumented call (LLM calls, tool calls, handoffs). Everything above it (orchestration, retries, input prep), alongside it (non-SDK LLM calls, unregistered tools, downstream services), and below it (post-processing, persistence) is invisible unless you add manual spans. Default to a **hybrid plan**: trace function root wraps the workflow with manual `●` spans, the SDK call appears as one `(agent)` child whose grandchildren are `[auto]` lines, and other manual spans capture the work around it. A bare auto-only plan (root = the SDK call, no surrounding manual spans) is only valid when the workflow truly is just the SDK call with no surrounding work — confirm there's nothing meaningful above/alongside/below before defaulting to it.
 
     Then present the trace plan **using the format defined in the "Trace Plan Format" reference section below** (legend → grammar → template precedence → canonical example). **STOP** — use AskUserQuestion to confirm before writing code.
-11. Instrument following the SDK guide exactly — purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure. Batch repetitive edits in parallel (one message, many edit calls); for large mechanical fan-outs (>10 files of the same wrapper pattern), validate the pattern on one file, then delegate the rest to a subagent.
+11. Instrument following the SDK reference exactly — purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure. Batch repetitive edits in parallel (one message, many edit calls); for large mechanical fan-outs (>10 files of the same wrapper pattern), validate the pattern on one file, then delegate the rest to a subagent.
 12. Tell the user how to run the app to generate the first trace — give exact command(s). Do NOT run it yourself.
 13. **MANDATORY STOP — never silently end the cycle without the A/B/C/D prompt.** Check whether traces already exist for the current trace function key via `mcp__plugin_bitfab_Bitfab__search_traces` (or `list_trace_functions`) — the **only** place the skill calls these tools. An empty result is expected (the user hasn't run the app yet) and means "offer option A," not "skip step 13." Then use AskUserQuestion:
     > We recommend **A**: generate traces before instrumenting the next workflows - [one-line reason].
@@ -151,17 +153,17 @@ Never modify existing code on a refactor path without completing this three-step
 
 Create or update replay scripts for instrumented trace functions. Requires instrumentation in the codebase; does **not** require existing traces — replay scripts are created from trace function keys in the code, not captured trace data.
 
-Replay scripts let the team regression-test any trace function against production data with one command — they fetch historical traces, re-run them through the current code, and report old vs. new outputs side-by-side. Each SDK has its own replay API (e.g., `bitfab.replay()` in TypeScript, `client.replay()` in Python, `client.replay` in Ruby, `client.Replay()` in Go).
+Replay scripts let the team regression-test any trace function against production data with one command — they fetch historical traces, re-run them through the current code, and report old vs. new outputs side-by-side. Note: **Go does not support replay** — skip this phase if the project is Go-only.
 
-For replay API details, call `mcp__plugin_bitfab_Bitfab__setup_bitfab` with the detected language to get the SDK guide.
+**Source of truth:** https://docs.bitfab.ai/<language>-sdk#replay (e.g. `/typescript-sdk#replay`, `/python-sdk#replay`, `/ruby-sdk#replay`). That page has the API signature, a copy-pasteable example `scripts/replay.<ext>`, the **replay output contract** (what to print to stdout), and the **input serialization caveat**. **Read it before creating or modifying a replay script** — do not improvise the script shape from memory. If you need anything else about the SDK beyond what the Instrument phase covered, the rest of `docs.bitfab.ai/<language>-sdk` is the reference.
 
 1. **Gather all trace function keys** by searching for SDK patterns (`getFunction("key")`, `get_function("key")`, `bitfab_function "key"`, `WithFunctionName("key")`). This is the source of truth for what replay must cover.
 2. **Search for existing replay scripts** — files matching `scripts/replay.*`, `scripts/*replay*`, or any file importing/calling the SDK's replay API.
 3. **Compare coverage.** Replay is non-interactive once entered — do not ask the user whether to create or add scripts:
-   - If replay scripts exist and cover all keys: report up to date, stop.
+   - If replay scripts exist and cover all keys: verify each one already conforms to the Replay Output Contract in the docs (prints full original and new values to stdout — never just counts). If any don't, fix them; otherwise report up to date and stop.
    - If replay scripts exist but are missing trace function keys: add the missing scripts in step 4.
    - If no replay scripts exist: create them in step 4.
-4. **Create the replay script** in the project's language (TypeScript, Python, Ruby, or Go). It should:
+4. **Create the replay script** following the example in the SDK reference's Replay section (https://docs.bitfab.ai/<language>-sdk#replay), adapted to this codebase. The non-negotiables (enforced by the docs page, repeated here so the script review catches them):
    - Accept a pipeline name as a CLI argument
    - Accept optional `--limit N` (default 10) and `--trace-ids id1,id2` flags
    - Map pipeline names to trace function keys and their replay functions
@@ -171,7 +173,7 @@ For replay API details, call `mcp__plugin_bitfab_Bitfab__setup_bitfab` with the 
      - Stream/socket writers: no-op (`{ write: () => {}, merge: () => {} }`) — no client on the other end
      - Session/request identifiers: minimal stub with the fields the function reads
    - **Caveat: watch for module-level import side effects.** Importing the instrumented function transitively runs the app's module initialization — if that opens listeners, binds ports, or connects to prod, the replay script inherits it. When in doubt, confirm the replay env points at a staging/local DB before running.
-   - Call the SDK's replay API and print results with delta summaries
+   - **Follow the docs' Replay Output Contract**: for each item, print the full original and full new output values to stdout (serialize non-strings to JSON). Never print only lengths, counts, hashes, or truncated previews — subagents reading the output can't reason from `5 → 7 (+2)`.
    - Print a summary (total replayed, same, changed, errors) and the test run URL
    - Live in a `scripts/` directory (or the project's existing scripts location)
 5. **Safety net for legacy instrumentation.** If an already-instrumented function (introduced before step 6's serializability gate, or via another path) can't be invoked from the replay script — most commonly because it isn't exported, is defined inline in a route handler, or takes unserializable inputs — use AskUserQuestion offering step 6's two resolutions: **"Move trace boundary inward"** or **"Refactor" (Recommended)**. If the user declines both, fall back to **"Leave as-is"** — add a header comment noting why the function isn't callable and flag that the script will rot. Reason from the function's signature and visibility; do not execute the script to detect this. **If the user picks "Refactor" (or a boundary move that requires rewriting callers), apply the "Refactor confirmation" rule above — present a refactor plan labeled as *visibility* or *structural* and get a second confirmation before modifying code.**

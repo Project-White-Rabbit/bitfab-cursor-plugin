@@ -153,6 +153,8 @@ Collect the trace IDs from the labeled dataset (Phase 3). Run the replay script 
 cd <project-dir> && npx tsx scripts/replay.ts <pipeline-name> --trace-ids <id1>,<id2>,<id3>,...
 ```
 
+**Before running: verify the replay script prints the full original and new output values to stdout for every item** (not just lengths, counts, hashes, or truncated previews). If it doesn't, fix the script first — the Replay Output Contract and example script live in the SDK reference at `https://docs.bitfab.ai/<language>-sdk#replay`. Subagents can't evaluate an improvement from `5 → 7 (+2)`.
+
 ### Step 3: Evaluate Against Labels & Annotations
 
 Read the replay output. For each trace in the dataset, use the label (pass/fail) and annotation from Phase 3 to judge whether the new output is an improvement:
