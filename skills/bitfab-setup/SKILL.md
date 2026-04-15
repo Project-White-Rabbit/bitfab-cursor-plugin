@@ -1,6 +1,6 @@
 ---
 name: bitfab-setup
-description: "Set up Bitfab tracing. Usage: /bitfab-setup [all|login|login headless|instrument|replay]"
+description: "Set up Bitfab tracing. Usage: /bitfab-setup [all|login|login headless|instrument|modify|replay]"
 ---
 
 # Bitfab Setup
@@ -10,7 +10,7 @@ description: "Set up Bitfab tracing. Usage: /bitfab-setup [all|login|login headl
 - Present 2-5 concrete options
 - One decision per question — never batch
 
-This skill has three phases: **login**, **instrument**, and **replay**. Run individually or all at once.
+This skill has four phases: **login**, **instrument**, **modify**, and **replay**. Run individually or all at once (`all` runs login → instrument → replay; `modify` is only invoked explicitly or as a branch from the Instrument step 2 menu).
 
 **SDK reference:** https://docs.bitfab.ai is the source of truth for SDK install, initialization, API surface, and replay. Fetch the language-specific page (`/typescript-sdk`, `/python-sdk`, `/ruby-sdk`, `/go-sdk`) before writing instrumentation or replay code — do not improvise from memory.
 
@@ -18,10 +18,11 @@ This skill has three phases: **login**, **instrument**, and **replay**. Run indi
 
 | Invocation | Action |
 |---|---|
-| `/bitfab-setup` or `/bitfab-setup all` | Run all three phases in order |
+| `/bitfab-setup` or `/bitfab-setup all` | Run login → instrument → replay in order |
 | `/bitfab-setup login` | Authenticate via browser OAuth and retrieve API key |
 | `/bitfab-setup login headless` | Authenticate by pasting a token (no browser callback needed) |
 | `/bitfab-setup instrument` | Instrument AI workflows with Bitfab tracing |
+| `/bitfab-setup modify` | Modify an existing trace setup (add context, change depth, or move the root) |
 | `/bitfab-setup replay` | Create or update replay scripts for instrumented workflows |
 
 ---
@@ -84,7 +85,7 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
 
 1. **Detect the project language** (TypeScript, Python, Ruby, or Go). In a monorepo, identify which directories are **applications** (services, APIs, agents) vs **libraries** (SDKs, shared packages). Focus on application directories.
 2. **Search for existing SDK usage** (`withSpan`, `@span`, `bitfab_span`, `client.Span`, `getFunction`, `get_function`, etc.). In a monorepo, search **each application directory separately** — a root-level search can miss subdirectories.
-   - If found: list the trace function keys, then use AskUserQuestion — "Search for more workflows" (find uninstrumented gaps) / "Continue" (skip to replay). If "Continue", skip to Replay.
+   - If found: list the trace function keys, then use AskUserQuestion — "Search for more workflows" (find uninstrumented gaps) / "Modify an existing trace setup" (jump to the Modify phase) / "Continue" (skip to replay). If "Modify", jump to the Modify phase. If "Continue", skip to Replay.
    - If not found: **proceed to step 3** — no SDK usage does NOT mean nothing to instrument, it means the SDK hasn't been installed yet. NEVER conclude "nothing to instrument" before completing step 6.
 3. Use the API key from the Login phase (or retrieve it now if already authenticated)
 4. Install the SDK (if not already installed) and set the `BITFAB_API_KEY` environment variable
@@ -114,7 +115,7 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
     **For trace processor SDKs (OpenAI Agents SDK, etc.) — extend beyond the processor.** The processor only auto-captures what runs *inside* the SDK's instrumented call (LLM calls, tool calls, handoffs). Everything above it (orchestration, retries, input prep), alongside it (non-SDK LLM calls, unregistered tools, downstream services), and below it (post-processing, persistence) is invisible unless you add manual spans. Default to a **hybrid plan**: trace function root wraps the workflow with manual `●` spans, the SDK call appears as one `(agent)` child whose grandchildren are `[auto]` lines, and other manual spans capture the work around it. A bare auto-only plan (root = the SDK call, no surrounding manual spans) is only valid when the workflow truly is just the SDK call with no surrounding work — confirm there's nothing meaningful above/alongside/below before defaulting to it.
 
     Then present the trace plan **using the format defined in the "Trace Plan Format" reference section below** (legend → grammar → template precedence → canonical example). **STOP** — use AskUserQuestion to confirm before writing code.
-11. Instrument following the SDK reference exactly — purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure. Batch repetitive edits in parallel (one message, many edit calls); for large mechanical fan-outs (>10 files of the same wrapper pattern), validate the pattern on one file, then delegate the rest to a subagent.
+11. Instrument following the SDK reference exactly — purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure. Batch repetitive edits in parallel (one message, many Edit calls); for large mechanical fan-outs (>10 files of the same wrapper pattern), validate the pattern on one file, then delegate the rest to a subagent.
 12. Tell the user how to run the app to generate the first trace — give exact command(s). Do NOT run it yourself.
 13. **MANDATORY STOP — never silently end the cycle without the A/B/C/D prompt.** Check whether traces already exist for the current trace function key via `mcp__plugin_bitfab_Bitfab__search_traces` (or `list_trace_functions`) — the **only** place the skill calls these tools. An empty result is expected (the user hasn't run the app yet) and means "offer option A," not "skip step 13." Then use AskUserQuestion:
     > We recommend **A**: generate traces before instrumenting the next workflows - [one-line reason].
@@ -146,6 +147,65 @@ Whenever the user picks "refactor to extract a pure core" (or any option that mo
    - **"Cancel"** — return to the previous AskUserQuestion (step 8's (a)/(b), or Replay step 5's three-option prompt) so the user can pick a different resolution
 
 Never modify existing code on a refactor path without completing this three-step confirmation. Adding new instrumentation wrappers to unchanged functions is not a refactor — this rule does not apply to step 11's purely-additive instrumentation.
+
+---
+
+## Modify
+
+Adjust an **existing** trace setup. Requires existing SDK usage in the codebase — if none exists, run Instrument first. Triggered explicitly by `/bitfab-setup modify`, or selected from the AskUserQuestion at Instrument step 2 when existing SDK usage is found.
+
+Every Modify cycle targets **exactly one** trace function and picks **exactly one** of five directions. Never batch multiple trace functions or mix directions in one cycle — if the user wants more, loop via the step 9 menu.
+
+1. **Gather existing trace functions** by searching for SDK patterns (`getFunction("key")`, `get_function("key")`, `bitfab_function "key"`, `WithFunctionName("key")`). List each key alongside its root function. If none are found, tell the user Modify needs existing instrumentation and suggest `/bitfab-setup instrument`.
+2. **Pick exactly ONE trace function to modify.** Use AskUserQuestion with the list of existing keys. Recommend the one the user most recently instrumented (or the one most recently referenced in the current session) and explain why in one line.
+3. **Reconstruct the current trace plan.** Read the instrumented files to map the existing span tree. Render it as the "before" plan using the Default view template from the **Trace Plan Format** reference section. Do not present it yet — it becomes the left-hand side of the diff in step 6.
+4. **Pick exactly ONE direction.** Use AskUserQuestion with all five directions below — recommend the one that matches the user's original ask and explain why in one line. Never mix directions in a single cycle.
+
+    | # | Direction | What changes | What must stay the same |
+    |---|---|---|---|
+    | 1 | **Add context** | Add `addContext`/`setContext`/metadata calls, or insert span(s) between the existing root and an existing descendant, without changing the root or the deepest leaf | Root, deepest leaf, overall depth |
+    | 2 | **Increase depth** | Wrap currently-skipped callees inside existing spans as new instrumented children (new leaves deeper in the tree) | Root, existing siblings at each level |
+    | 3 | **Reduce depth** | Remove `withSpan`/`@span` wrappers from the deepest instrumented spans, or un-nest them into siblings of their parent | Root, the underlying function call (arguments, return value, control flow) |
+    | 4 | **Move root upstream** | Replace the root with a **caller** of the current root (wider scope) | All existing descendants remain under the new root |
+    | 5 | **Move root downstream** | Replace the root with a **callee** of the current root (narrower scope) | Interesting LLM/tool activity still sits under the new root |
+
+5. **Build the modified trace plan under the same PURELY ADDITIVE constraint as Instrument step 10.** The modified tree must be implementable without behavior changes. If the chosen direction requires awaiting a stream that wasn't awaited, delaying a call, reordering operations, blocking a callback, or restructuring control flow, the direction is invalid for this cycle — tell the user which direction doesn't fit and why, then return to step 4 for a different direction (or suggest splitting into multiple cycles). Never present a behavior-changing approach as an option.
+
+    Direction-specific rules:
+    - **Add context** — list the exact context keys/values to capture and the span they attach to. If inserting an intermediate span, read the intermediate function's signature for accurate parameter/return names.
+    - **Increase depth** — read the signatures of the callees you'll wrap. Each new span needs a type annotation (`function`, `llm`, `tool`, `agent`, `handoff`).
+    - **Reduce depth** — list each span to remove by name. Removing a wrapper must not delete any real function call — removing an instrumented wrapper leaves the underlying call in place.
+    - **Move root upstream** — read the new caller's signature. The new root must still be a common ancestor of every existing LLM/tool span; if the caller fans out to parallel work unrelated to this trace function, upstream is invalid.
+    - **Move root downstream** — the new root must still cover the interesting LLM/tool activity. If critical LLM spans live outside the downstream callee, downstream is invalid.
+
+6. **Present a before/after diff** using the **Trace Plan Format** reference section:
+
+    ```
+    Before:
+    <current default-view trace plan>
+
+    After:
+    <modified default-view trace plan>
+    ```
+
+   Below the two plans, list `Files changed:` for the edits this cycle will make — paths only, no annotations. **STOP** — use AskUserQuestion: **Proceed** (recommended) / **Expand details** (re-render both plans in the expanded view) / **Adjust** (user wants changes — ask what) / **Cancel**.
+
+7. **Decide the trace function key.** Directions 1–3 always keep the existing key. Directions 4–5 change the root function, so the existing key may no longer describe it. Use AskUserQuestion:
+   - **Keep key `<existing>`** — new traces continue to aggregate with historical traces on the same key (recommended when the new root plays the same role)
+   - **Rename to `<suggested-new-key>`** — starts a fresh trace function. Historical traces on the old key are preserved but will not appear under the new key.
+
+   Skip this step for directions 1–3.
+
+8. **Apply the changes — purely additive to behavior.** Same rules as Instrument step 11: never change arguments, return values, error handling, variable names, types, control flow, or code structure. Removing a `withSpan`/`@span` wrapper (direction 3) is the only structural edit allowed, and only when it leaves the wrapped call, its arguments, and its return value untouched. Batch repetitive edits in parallel (one message, many Edit calls).
+
+9. Tell the user how to run the app to generate a trace with the modified setup — exact command(s). Do NOT run it yourself. Then **MANDATORY STOP** — use AskUserQuestion:
+    > We recommend **A**: generate a trace with the modified setup so the diff is observable end-to-end.
+    >
+    > A) **Generate a trace for the modified setup** — [present the script to run; allow the user to let you run it]
+    > B) **Modify another trace function** — returns to step 2
+    > C) **Done** — stop here
+
+    B returns to step 2. A and C exit the Modify loop. After exit, stop (Modify does not auto-continue to Replay — the user can invoke `/bitfab-setup replay` separately).
 
 ---
 
