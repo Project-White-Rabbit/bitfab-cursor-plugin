@@ -87,22 +87,63 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
 3. Use the API key from the Login phase (or retrieve it now if already authenticated)
 4. Install the SDK (if not already installed) and set the `BITFAB_API_KEY` environment variable
 5. Call `mcp__plugin_bitfab_Bitfab__setup_bitfab` with the detected language to get the SDK guide. Read it carefully.
-6. When deciding what the root of a trace function should be, you should target a common ancestor for an entire agents activity across many prompts, tools, and context.
-7. Read the codebase to identify ALL AI workflows — every place the app makes LLM calls, runs agents, or makes AI-driven decisions
-8. Present a numbered list of workflows found, ordered by value (most complex or LLM-heavy first). For each: function name, brief description, why tracing it is valuable. Recommend one to start with. **Ask the user to pick exactly ONE workflow to instrument first.** Never accept "multiple" or "all" — each Instrument cycle produces exactly one trace function with one trace plan and one set of code changes. If the user wants to instrument several, they will be done sequentially via the loop in step 13, one at a time.
+6. When deciding what the root of a trace function should be, you should target a common ancestor for an entire agent's activity across many prompts, tools, and context. The root is the **outer workflow function** that owns the AI behavior end-to-end (API handler, message processor, job runner, pipeline coordinator) — almost never the LLM call or the agent SDK's `run()` itself. If the workflow wraps an SDK agent call (e.g. OpenAI Agents SDK), the root is the caller that prepares input → invokes the agent → processes the output → returns to the caller, NOT the agent call.
+
+    **Hard constraint: the root's inputs must be serializable by the SDK's tracing layer so traces can be replayed.** Every span input and output gets serialized into the trace using the SDK's language-native serialization (TypeScript/JSON, Python/JSON via Pydantic, Ruby/`to_json`, Go/`json.Marshal`). If the outer workflow function takes live runtime objects that don't round-trip through that serialization — browser objects (`MediaStream`, `RTCPeerConnection`, `WebSocket`, DOM refs), HTTP `Request`/`Response`, stream writers, open sockets, or framework request contexts whose content is genuinely opaque (not reconstructible from headers + user id) — the trace can't be replayed. Module-level dependencies (DB clients, env vars, config loaders) do **not** count — replay inherits them from the app's loaded environment. When the natural outer boundary has unserializable inputs, do **one** of the following **before writing code**:
+    - **Move the trace boundary inward** to the first function whose inputs are serializable (e.g. trace `processTurn(transcript, context)` instead of `handleSession(stream, peerConnection)`). This is not a refactor.
+    - **Refactor** so a function with serializable inputs exists. Two flavors, chosen per case in the refactor plan:
+      - **Visibility refactor (common)** — the logic that takes serializable inputs already exists inline but isn't importable (embedded in a route handler, not exported). Extract it into a named, exported function at module scope. No semantic change.
+      - **Structural refactor (rare overall, common for realtime/streaming/browser apps)** — no function with serializable inputs exists yet. Introduce one: a pure core whose parameters are serializable, with callers constructing them. A real rewrite.
+
+    Raise this with the user in step 8 (not later) — never instrument a root with unserializable inputs and try to fix it in the Replay phase.
+7. Read the codebase to identify ALL AI workflows — every place the app makes LLM calls, runs agents, or makes AI-driven decisions. For each, find the **outer workflow boundary** (per the rule in step 6), and also note any meaningful work **above** the agent/LLM call (auth, validation, input prep, retry/orchestration loops, multi-agent coordination), **alongside** it (custom LLM calls outside the SDK, tools that aren't registered with the SDK, downstream services), and **below** it (post-processing, parsing, persistence). These are the manual spans that will sit around any auto-captured SDK content.
+8. Present a numbered list of workflows found, ordered by value (most complex or LLM-heavy first). For each, give:
+   - **Trace boundary** — the outer workflow function that will be the trace function root (per step 6 — NOT the SDK/agent call itself)
+   - **Inputs** — the shape of the function's inputs, and an explicit note that they're serializable by the SDK's tracing layer. If the natural outer boundary's inputs are unserializable (live browser/runtime objects, HTTP req/res, stream writers, sockets, opaque request contexts), state that here and present the two resolutions from step 6 as part of this workflow's entry: **(a) move the boundary inward to `<specific inner function with serializable inputs>`** (recommended when an obvious candidate exists — not a refactor), or **(b) refactor**. Do not proceed to step 9 until the user picks one — never instrument an unserializable root. **If the user picks (b), present a refactor plan — labeled as *visibility* (extract + export, logic unchanged) or *structural* (new pure-core fn) — and get an explicit second confirmation before modifying code. See the "Refactor confirmation" rule below.**
+   - **What's covered end-to-end** — the work above, alongside, and below any agent/LLM/SDK call that this trace will capture (be specific: list the orchestration, custom LLM calls, tools, downstream services that will become spans)
+   - **Why tracing it is valuable**
+
+   The description must commit to the actual scope. If the plan will only auto-capture an SDK's internals, say so explicitly — do NOT use language like "complete tracing of X workflow" when the trace will only cover an SDK call's internals.
+
+   Recommend one to start with. **Ask the user to pick exactly ONE workflow to instrument first.** Never accept "multiple" or "all" — each Instrument cycle produces exactly one trace function with one trace plan and one set of code changes. If the user wants to instrument several, they will be done sequentially via the loop in step 13, one at a time.
 9. **Read function signatures you'll reference in the trace plan** — root function first, then any whose parameter names or return fields aren't already obvious from the step 7 scan. Skipped leaf functions only need their names; don't Read them unless their shape appears in the plan. Never guess names. See "Trace Plan Format" and "Trace Plan Accuracy" in the Reference section below.
-10. **Build the trace plan under a hard constraint: the resulting instrumentation must be purely additive.** If a candidate tree requires *any* behavior change to make spans nest correctly (awaiting a stream that wasn't awaited, delaying a call, reordering operations, blocking a callback, restructuring control flow), the tree is invalid — restructure the *tree* instead (make spans siblings, split into separate trace functions across separate cycles, or accept a flatter shape). Never present a behavior-changing approach as an option, not even as a non-recommended alternative. Then present the trace plan **using the format defined in the "Trace Plan Format" reference section below** (legend → grammar → template precedence → canonical example). **STOP** — use AskUserQuestion to confirm before writing code.
+10. **Build the trace plan under a hard constraint: the resulting instrumentation must be purely additive.** If a candidate tree requires *any* behavior change to make spans nest correctly (awaiting a stream that wasn't awaited, delaying a call, reordering operations, blocking a callback, restructuring control flow), the tree is invalid — restructure the *tree* instead (make spans siblings, split into separate trace functions across separate cycles, or accept a flatter shape). Never present a behavior-changing approach as an option, not even as a non-recommended alternative.
+
+    **For trace processor SDKs (OpenAI Agents SDK, etc.) — extend beyond the processor.** The processor only auto-captures what runs *inside* the SDK's instrumented call (LLM calls, tool calls, handoffs). Everything above it (orchestration, retries, input prep), alongside it (non-SDK LLM calls, unregistered tools, downstream services), and below it (post-processing, persistence) is invisible unless you add manual spans. Default to a **hybrid plan**: trace function root wraps the workflow with manual `●` spans, the SDK call appears as one `(agent)` child whose grandchildren are `[auto]` lines, and other manual spans capture the work around it. A bare auto-only plan (root = the SDK call, no surrounding manual spans) is only valid when the workflow truly is just the SDK call with no surrounding work — confirm there's nothing meaningful above/alongside/below before defaulting to it.
+
+    Then present the trace plan **using the format defined in the "Trace Plan Format" reference section below** (legend → grammar → template precedence → canonical example). **STOP** — use AskUserQuestion to confirm before writing code.
 11. Instrument following the SDK guide exactly — purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure. Batch repetitive edits in parallel (one message, many edit calls); for large mechanical fan-outs (>10 files of the same wrapper pattern), validate the pattern on one file, then delegate the rest to a subagent.
 12. Tell the user how to run the app to generate the first trace — give exact command(s). Do NOT run it yourself.
-13. **MANDATORY STOP — never jump straight to Replay or silently end the cycle.** Check whether traces already exist for the current trace function key via `mcp__plugin_bitfab_Bitfab__search_traces` (or `list_trace_functions`) — the **only** place the skill calls these tools. An empty result is expected (the user hasn't run the app yet) and means "offer option A," not "skip step 13." Then use AskUserQuestion:
+13. **MANDATORY STOP — never silently end the cycle without the A/B/C/D prompt.** Check whether traces already exist for the current trace function key via `mcp__plugin_bitfab_Bitfab__search_traces` (or `list_trace_functions`) — the **only** place the skill calls these tools. An empty result is expected (the user hasn't run the app yet) and means "offer option A," not "skip step 13." Then use AskUserQuestion:
     > We recommend **A**: generate traces before instrumenting the next workflows - [one-line reason].
     >
     > A) **Generate traces [current workflow]** — [present the script to run to the user. Allow them to let you to run it for them.] *(omit if traces already exist)*
     > B) **Instrument [next workflow]** — [why it's the next highest value]
     > C) **Instrument [other workflow]** — [alternative]
-    > D) **Done** — stop here
+    > D) **Done instrumenting — proceed to Replay** (in `all` mode) / **Done** (in `instrument` mode)
 
-    A, B, and C all return to step 8 for the selected workflow. Only D exits the Instrument loop. After D, if invoked in `all` mode, proceed to Replay; otherwise stop.
+    A, B, and C all return to step 8 for the selected workflow. Only D exits the Instrument loop.
+
+    **After D in `all` mode, Replay ALWAYS runs.** Replay does not depend on traces existing — replay scripts are built from trace function keys in the instrumented code, not captured trace data. Do not skip Replay because no traces are available. In `instrument` mode, D stops after the Instrument loop.
+
+### Refactor confirmation (applies to step 8 and Replay step 5)
+
+Whenever the user picks "refactor to extract a pure core" (or any option that modifies existing functions/call sites, not just adds new wrappers), you must:
+
+1. **Build a refactor plan** listing:
+   - **Flavor** — **visibility** (extract + export, logic unchanged) or **structural** (new pure-core fn with serializable inputs, may require callers to construct them). Most cases are visibility.
+   - **Source** — the function(s) that will be modified, with file path and current signature
+   - **Extraction** — the new function name, its signature, and (for visibility refactors) an explicit note that the logic moves unchanged
+   - **Trace wrap** — which function will carry the `getFunction(...)` / SDK trace wrap after the refactor
+   - **Call sites** — every caller that will be rewritten, with file path and line range
+
+2. **Present the plan verbatim** to the user, in the same format above.
+
+3. **AskUserQuestion** with exactly two options:
+   - **"Apply refactor"** — proceed to write the changes
+   - **"Cancel"** — return to the previous AskUserQuestion (step 8's (a)/(b), or Replay step 5's three-option prompt) so the user can pick a different resolution
+
+Never modify existing code on a refactor path without completing this three-step confirmation. Adding new instrumentation wrappers to unchanged functions is not a refactor — this rule does not apply to step 11's purely-additive instrumentation.
 
 ---
 
@@ -116,23 +157,24 @@ For replay API details, call `mcp__plugin_bitfab_Bitfab__setup_bitfab` with the 
 
 1. **Gather all trace function keys** by searching for SDK patterns (`getFunction("key")`, `get_function("key")`, `bitfab_function "key"`, `WithFunctionName("key")`). This is the source of truth for what replay must cover.
 2. **Search for existing replay scripts** — files matching `scripts/replay.*`, `scripts/*replay*`, or any file importing/calling the SDK's replay API.
-3. **Compare coverage:**
-   - If replay scripts exist but are missing trace function keys: use AskUserQuestion — "Add missing replay scripts for [Z]" / "Skip". If "Add missing", create them in step 4. If "Skip", stop.
+3. **Compare coverage.** Replay is non-interactive once entered — do not ask the user whether to create or add scripts:
    - If replay scripts exist and cover all keys: report up to date, stop.
-   - If no replay scripts exist: use AskUserQuestion — "Create replay script" / "Skip". If "Skip", stop.
+   - If replay scripts exist but are missing trace function keys: add the missing scripts in step 4.
+   - If no replay scripts exist: create them in step 4.
 4. **Create the replay script** in the project's language (TypeScript, Python, Ruby, or Go). It should:
    - Accept a pipeline name as a CLI argument
    - Accept optional `--limit N` (default 10) and `--trace-ids id1,id2` flags
    - Map pipeline names to trace function keys and their replay functions
    - **Each pipeline's replay function MUST import and call the actual instrumented function** — never a stub or identity function. If the function signature doesn't match the raw input shape, reshape arguments in the wrapper.
-   - **If the instrumented function is factory-created** (takes session, stream writers, config via closure), call the factory in the wrapper with mocks:
-     - Stream/socket writers: no-op (`{ write: () => {}, merge: () => {} }`)
-     - Auth/session objects: minimal mock with the fields the function reads
-     - Model IDs / config: sensible default or env var
-     - DB-dependent functions: note in usage comment that a running DB is required
+   - **Replay runs in the app's environment.** The script imports the app as a library — DB clients, env vars, config loaders, and model IDs resolve from the loaded environment. Do **not** mock them. Run the script with `.env` loaded (e.g. `pnpm with-env tsx scripts/replay.ts`, `dotenv run -- python scripts/replay.py`, or the project's equivalent) so the app's normal bootstrap applies.
+   - **Only mock what has no live counterpart at replay time.** For factory-created instrumented functions (taking session, stream writers via closure), the wrapper passes:
+     - Stream/socket writers: no-op (`{ write: () => {}, merge: () => {} }`) — no client on the other end
+     - Session/request identifiers: minimal stub with the fields the function reads
+   - **Caveat: watch for module-level import side effects.** Importing the instrumented function transitively runs the app's module initialization — if that opens listeners, binds ports, or connects to prod, the replay script inherits it. When in doubt, confirm the replay env points at a staging/local DB before running.
    - Call the SDK's replay API and print results with delta summaries
    - Print a summary (total replayed, same, changed, errors) and the test run URL
    - Live in a `scripts/` directory (or the project's existing scripts location)
+5. **Safety net for legacy instrumentation.** If an already-instrumented function (introduced before step 6's serializability gate, or via another path) can't be invoked from the replay script — most commonly because it isn't exported, is defined inline in a route handler, or takes unserializable inputs — use AskUserQuestion offering step 6's two resolutions: **"Move trace boundary inward"** or **"Refactor" (Recommended)**. If the user declines both, fall back to **"Leave as-is"** — add a header comment noting why the function isn't callable and flag that the script will rot. Reason from the function's signature and visibility; do not execute the script to detect this. **If the user picks "Refactor" (or a boundary move that requires rewriting callers), apply the "Refactor confirmation" rule above — present a refactor plan labeled as *visibility* or *structural* and get a second confirmation before modifying code.**
 
 ---
 
@@ -149,7 +191,7 @@ The trace plan is a strict format. Do not improvise — follow the legend, gramm
 | Symbol | Meaning | Where it appears |
 |---|---|---|
 | `●` | Instrumented span | Default + Expanded + Processor views |
-| `○` | Skipped function (not instrumented) | Expanded view only |
+| `○` | Skipped function (not instrumented) | Only when the expand modifier is applied (on top of any base template) |
 | `[root]` | Literal label for the trace function entry point | Always, on its own line above the tree |
 | `[loop]` | Control-flow group: children execute in a loop | Inside the tree, in place of a span |
 | `[branch]` | Control-flow group: children are conditional branches | Inside the tree, in place of a span |
@@ -171,19 +213,26 @@ Brackets `[…]` are structural labels (not spans). Parens `(…)` are span type
 4. **Span lines** — `<prefix>● <name> (<type>)`. Type annotation is **required** on every `●` line.
 5. **Skipped lines** — `<prefix>○ <name>`. No type annotation, no description.
 6. **Control-flow lines** — `<prefix>[loop]` / `[branch]` / `[parallel]`. They take children but have no symbol and no type.
-7. **Footer** — one blank line, then either:
-   - `Files changed:` followed by a numbered list (manual instrumentation), OR
-   - `Setup: <one-line setup description>` (trace processor only)
+7. **Footer** — one blank line, then one or both of:
+   - `Files changed:` followed by a numbered list (any plan with manual `●` spans)
+   - `Setup: <one-line setup description>` (any plan that registers a trace processor)
+   Hybrid plans (manual spans + processor) include both, with `Setup:` first then `Files changed:`. A pure-processor plan with no manual spans includes only `Setup:`. A pure-manual plan with no processor includes only `Files changed:`.
 8. **No descriptions, no counts, no parameter details, no blank lines between siblings, no trailing whitespace.**
 9. **One trace function per plan.** A trace plan describes exactly one trace function — exactly one `Trace function: "..."` header, exactly one `[root]`, exactly one tree, exactly one `Files changed:` section. If the cycle would require instrumenting two trace functions, that's two cycles, not one plan with two trees.
 
 #### Which template to use (precedence — check top to bottom, stop at first match)
 
-1. **Trace processor template** — if the SDK guide says to register a processor (e.g. OpenAI Agents SDK `addTraceProcessor`). Children of the root span are auto-captured and shown as `[auto]` lines.
-2. **Expanded view** — only if the user explicitly asks ("show details", "expand", "include skipped"), or selects "Expand details" from the AskUserQuestion preview.
-3. **Default view** — every other case. This is the recommended default.
+Pick the **base template** from SDK capability and surrounding work:
 
-Never mix templates. Never invent a fourth variant.
+1. **Trace processor (hybrid) template** — if the SDK guide says to register a processor (e.g. OpenAI Agents SDK `addTraceProcessor`) AND there is meaningful work above, alongside, or below the SDK call. The trace function root wraps the broader workflow with manual `●` spans; the SDK call appears as one `(agent)` child whose grandchildren are the `[auto]` lines; other manual spans capture work outside the SDK. This is the default for any trace processor SDK whenever there's surrounding workflow logic — which is almost always.
+2. **Trace processor (bare) template** — only when the workflow truly is *just* the SDK call with no surrounding work. Children of the root span are auto-captured and shown as `[auto]` lines. Confirm before using this — if the workflow has any input prep, orchestration, retries, post-processing, or non-SDK LLM/tool calls, use the hybrid template instead.
+3. **Default view** — every other case (no processor in play). This is the recommended default for SDKs without a processor.
+
+Then apply the **expand modifier**, orthogonally:
+
+- If the user explicitly asks for more detail ("show details", "expand", "include skipped") or selects "Expand details" from the AskUserQuestion preview, add `○` skipped lines to whichever base template was picked. Never drop `[auto]` lines when expanding a processor template — skipped lines and auto-captured lines coexist in the tree. Without an explicit ask, do not add skipped lines.
+
+Never mix base templates beyond the hybrid pattern. Never invent a fifth variant.
 
 #### Canonical examples (copy-edit-substitute, do not restructure)
 
@@ -204,7 +253,7 @@ Files changed:
   2. pipeline.ts
 ```
 
-**Expanded view** — adds skipped (○) functions in true execution order:
+**Default + expand modifier** — adds skipped (○) functions in true execution order. The same modifier applies to processor templates (hybrid or bare) when the user asks for expansion — `○` lines coexist with `[auto]` lines in that case:
 
 ```
 Trace function: "<trace-function-key>"
@@ -228,7 +277,30 @@ Files changed:
 
 The legend line `● instrumented   ○ skipped` appears **only** in the expanded view, immediately under the header.
 
-**Trace-processor view** — auto-captured internals:
+**Trace-processor (hybrid) view** — workflow with manual spans wrapping auto-captured agent internals (default for processor SDKs):
+
+```
+Trace function: "handle-user-request"
+
+[root]
+● handleUserRequest (function)
+├─ ● validateAndPrepareInput (function)
+├─ ● runAgent (agent)
+│  ├─ LLM calls    [auto]
+│  ├─ tool calls   [auto]
+│  └─ handoffs     [auto]
+├─ ● scoreAgentOutput (llm)
+└─ ● persistResult (function)
+
+Setup: addTraceProcessor(processor) registered at startup
+Files changed:
+  1. handler.ts
+  2. tracing/setup.ts
+```
+
+The `[auto]` lines are auto-captured spans — the processor emits them inside the SDK call without manual instrumentation. They use `├─`/`└─` like normal children but carry no `●`/`○` symbol because you're not writing the span yourself. Manual `●` spans wrap the broader workflow above, alongside, and below the SDK call.
+
+**Trace-processor (bare) view** — only when the workflow IS just the SDK call:
 
 ```
 Trace function: "my-agent"
@@ -242,7 +314,7 @@ Trace function: "my-agent"
 Setup: addTraceProcessor(processor) registered at startup
 ```
 
-The `[auto]` lines are not spans — they describe what the processor will capture. They use `├─`/`└─` like normal children but carry no `●`/`○` symbol.
+Use this **only** when there is genuinely no work above, alongside, or below the SDK call. If there's any input prep, orchestration, retry, post-processing, or non-SDK LLM/tool call, use the hybrid view instead.
 
 #### Anti-examples (do NOT do these)
 
@@ -253,7 +325,9 @@ The `[auto]` lines are not spans — they describe what the processor will captu
 - ❌ `[Root]` or `[ROOT]` — literal label is lowercase `[root]`
 - ❌ Mixed indentation widths (2 spaces in one branch, 4 in another)
 - ❌ Blank lines between siblings inside the tree
-- ❌ Adding `Files changed:` to the trace-processor view, or omitting it from default/expanded
+- ❌ Omitting `Files changed:` from any plan that has manual `●` spans (hybrid trace-processor plans MUST include both `Setup:` and `Files changed:`)
+- ❌ Defaulting to the bare trace-processor view when the workflow has work above, alongside, or below the SDK call — use the hybrid view and add manual spans
+- ❌ Putting the SDK's agent call (e.g. `runAgent`, `Runner.run`) at `[root]` when the actual workflow has a clear outer function — the workflow function is the root, the SDK call is a child
 - ❌ Inventing extra sections like `Notes:` or `Estimated coverage:`
 - ❌ Two `Trace function: "..."` headers in one plan — split into two cycles
 - ❌ `● someFn (llm)   ← description here` — no inline descriptions, arrows, or trailing commentary on span lines
