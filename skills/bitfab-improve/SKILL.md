@@ -19,10 +19,12 @@ Use the **local plugin MCP tools** (`mcp__plugin_bitfab_Bitfab__*`) to find what
 
 If a `traceFunctionKey` was provided as an argument, use it. Otherwise:
 
-1. Call `mcp__plugin_bitfab_Bitfab__list_trace_functions` to list all available trace functions
-2. For each function, include a brief description of what it does — infer from the function key name (e.g., `memory-search` → searches memories, `memory-extraction` → extracts memories from conversations). Keep descriptions to one sentence.
-3. Present the full list to the user in the question text showing all functions with their keys and descriptions
-4. Use `AskUserQuestion` with just 2 options: the recommended function (pick the one with the most recent activity or traces) and a free-text "Type a function key" option. The user can see the full list above and either accept the recommendation or type their choice.
+1. Call `mcp__plugin_bitfab_Bitfab__list_trace_functions` to list all available trace functions. Use **only** the keys and metadata returned (trace counts, last activity) — do NOT invent or infer descriptions of what each function does from its key name. Key names are often ambiguous or misleading, and guessing produces hallucinated descriptions that confuse the user.
+2. **Cross-check each key against the local codebase** before presenting. For each returned key, `grep` the repo for string-literal uses of that exact key (across `*.ts`, `*.tsx`, `*.py`, `*.rb`, `*.go`, `*.baml`). Mark each function in the presented list as:
+   - **✅ instrumented here** — found in this repo, with the file path
+   - **⚠️ not found in this repo** — traces exist on Bitfab but the key isn't in this codebase (likely another repo or a renamed key)
+3. Present the full list in the question text showing ONLY: `<key>` · `<trace count>` · `<last activity>` · `<instrumented-here marker + path, or not-found marker>`. No invented summaries.
+4. Use `AskUserQuestion` with 2 options: the recommended function (prefer one that is ✅ instrumented here AND has recent activity) and a free-text "Type a function key" option. If nothing is instrumented here, say so explicitly in the question — don't hide it.
 
 ## Phase 2: Verify Instrumentation & Replay
 
