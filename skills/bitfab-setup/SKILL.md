@@ -27,6 +27,39 @@ This skill has four phases: **login**, **instrument**, **modify**, and **replay*
 
 ---
 
+## Preamble
+
+**Run only when invoked as `/bitfab-setup` or `/bitfab-setup all`** — skip for sub-modes (`login`, `login headless`, `instrument`, `modify`, `replay`), since the user already chose a specific phase.
+
+Render the block below **verbatim** as a single message, then continue straight to Login. Do **not** ask for confirmation, do **not** use AskUserQuestion, do **not** summarize in your own words.
+
+```
+Bitfab is an evaluation platform for AI code — capture what it does, turn it into reusable datasets, and verify fixes by running them against real data.
+
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│   CODE   │───▶│  TRACES  │───▶│ DATASETS │───▶│ IMPROVE  │
+│          │    │ (what it │    │(reusable │    │ (edit +  │
+│          │    │   did)   │    │test set) │    │ verify)  │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘
+
+Primitives
+  • Trace   — a recording of one workflow run (inputs, outputs, every step inside).
+              Ground truth for what your code actually did.
+  • Dataset — a curated collection of traces (failures, a specific workflow, custom).
+              The reusable test set your changes get measured against.
+  • Replay  — a tool that re-runs a dataset through your current code.
+              Turns production data into a ready-made regression test.
+
+Setup runs three phases:
+  1. LOGIN       — authenticate (15s, browser)
+  2. INSTRUMENT  — wrap your workflows with tracing (purely additive)
+  3. REPLAY      — generate a replay script for your trace functions
+```
+
+Then proceed to Login.
+
+---
+
 ## Login
 
 Authenticate with Bitfab and retrieve the API key.
