@@ -78,13 +78,13 @@ Build a dataset of labeled traces. If there are already enough validated traces,
 
 4. **Label them yourself FIRST (mandatory before step 5)** — Once the user approves the candidate traces, **you** label them. Call `mcp__plugin_bitfab_Bitfab__read_traces` with `scope: "full"` on the approved trace IDs (batch them — up to 10 per call), read each trace's inputs / output / spans yourself, and decide for each one whether it looks like a PASS or a FAIL. **Ground your judgment in the codebase, not just the trace text.** Before you start labeling, read the instrumented function in the user's source (you found it in Phase 2) and any nearby code that explains intent — comments, docstrings, README sections, related tests, BAML files — so you know what the function is *supposed* to do and what "good" looks like for it. Apply the same context to every trace: does this output achieve the function's goal as expressed in the code? Does it match the patterns in the already-validated traces? Then call `mcp__plugin_bitfab_Bitfab__update_agent_labels` once with an array of `{ traceId, label, annotation }` objects — **both `label` (true for pass, false for fail) and `annotation` (a one-or-two-sentence explanation written for the human reviewer, ideally referencing what the code is trying to do) are required for every trace**. Commit to a verdict — if you genuinely cannot decide, you didn't read the trace or the code carefully enough. The labels you save here start unapproved; they only become part of the validated dataset once a human approves them in step 5.
 
-   > 🚨 **HARD RULE — DO NOT SKIP:** You MUST call `mcp__plugin_bitfab_Bitfab__update_agent_labels` with verdicts for every approved trace BEFORE running `label.js` to open the labeling page. Sending the user into the labeling page without pre-labeled verdicts is a process violation. This is non-negotiable.
+   > 🚨 **HARD RULE — DO NOT SKIP:** You MUST call `mcp__plugin_bitfab_Bitfab__update_agent_labels` with verdicts for every approved trace BEFORE running `startDataset.js` to open the labeling page. Sending the user into the labeling page without pre-labeled verdicts is a process violation. This is non-negotiable.
 
    > **Made a mistake?** If you realize a verdict was wrong (e.g., you mislabeled a trace or want to re-evaluate), call `mcp__plugin_bitfab_Bitfab__update_agent_labels` again with `{ traceId, archive: true }` for those traces. The previous label is hidden (kept for audit), and you can re-label the trace from scratch with another `update_agent_labels` call.
 
 5. **Open the labeling page** — Run the label script to open the labeling page in the browser:
    ```bash
-   node <plugin-dir>/dist/commands/label.js <functionKey>
+   node <plugin-dir>/dist/commands/startDataset.js <functionKey>
    ```
    Where `<plugin-dir>` is the absolute path to the `bitfab-cursor-plugin` directory, and `<functionKey>` is the trace function key. This opens the labeling page showing agent-labeled traces awaiting approval and already-labeled traces. The user approves agent labels, relabels traces, or skips. The script blocks until the user clicks "Confirm dataset".
 
