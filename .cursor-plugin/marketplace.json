@@ -4,14 +4,14 @@
     "name": "Bitfab"
   },
   "metadata": {
-    "description": "Bitfab LLM evaluation tools for Cursor — trace inspection, grader management, and diagnostics via MCP",
+    "description": "Automated regression testing and improvements for your prompts, context, and tool calls.",
     "version": "0.1.44"
   },
   "plugins": [
     {
       "name": "bitfab",
       "source": "./",
-      "description": "Bitfab LLM evaluation tools for Cursor — trace inspection, grader management, and diagnostics via MCP",
+      "description": "Automated regression testing and improvements for your prompts, context, and tool calls.",
       "version": "0.1.44",
       "homepage": "https://github.com/Project-White-Rabbit/bitfab-cursor-plugin",
       "repository": "https://github.com/Project-White-Rabbit/bitfab-cursor-plugin",

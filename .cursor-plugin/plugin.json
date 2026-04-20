@@ -1,6 +1,6 @@
 {
   "name": "bitfab",
-  "description": "Bitfab LLM evaluation tools for Cursor — trace inspection, grader management, and diagnostics via MCP",
+  "description": "Automated regression testing and improvements for your prompts, context, and tool calls.",
   "version": "0.1.44",
   "author": {
     "name": "Bitfab"
