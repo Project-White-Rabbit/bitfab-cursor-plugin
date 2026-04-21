@@ -1,7 +1,8 @@
-import { runUpdate } from "bitfab-plugin-lib";
+import { parseUpdateMode, runUpdate } from "bitfab-plugin-lib";
 import { platform } from "../platform.js";
 import { getVersion } from "../version.js";
-runUpdate(getVersion(), platform).catch((err) => {
+const mode = parseUpdateMode(process.argv[2]);
+runUpdate(getVersion(), platform, mode).catch((err) => {
     console.error("Update failed:", err.message);
     process.exit(1);
 });
