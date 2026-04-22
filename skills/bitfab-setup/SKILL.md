@@ -24,7 +24,7 @@ Within an Instrument cycle, **instrumentation and the replay pipeline for the cy
 
 | Invocation | Action |
 |---|---|
-| `/bitfab-setup` or `/bitfab-setup all` | Run login → instrument → replay in order |
+| `/bitfab-setup` or `/bitfab-setup all` | Run login, then instrument + replay (in parallel per workflow) |
 | `/bitfab-setup login` | Authenticate via browser OAuth and retrieve API key |
 | `/bitfab-setup login headless` | Authenticate by pasting a token (no browser callback needed) |
 | `/bitfab-setup instrument` | Instrument AI workflows with Bitfab tracing |
@@ -56,10 +56,11 @@ Primitives
   • Replay  — a tool that re-runs a dataset through your current code.
               Turns production data into a ready-made regression test.
 
-Setup runs three phases:
-  1. LOGIN       — authenticate (15s, browser)
-  2. INSTRUMENT  — wrap your workflows with tracing (purely additive)
-  3. REPLAY      — generate a replay script for your trace functions
+Setup runs in two phases:
+  1. LOGIN                 — authenticate (15s, browser)
+  2. INSTRUMENT + REPLAY   — run in parallel per workflow:
+     • INSTRUMENT          — wrap your workflows with tracing (purely additive)
+     • REPLAY              — generate a replay script for your trace functions
 ```
 
 Then proceed to Login.
