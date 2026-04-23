@@ -6,10 +6,12 @@ export const platform: PlatformConfig = {
   setupHint: "/bitfab-setup",
   updateHint: "/bitfab-update",
   repo: "Project-White-Rabbit/bitfab-cursor-plugin",
+  remotePackageJsonPath: "package.json",
   cliBinary: "cursor",
   displayName: "Cursor",
   supportsAutoUpdate: false,
   marketplaceName: "bitfab",
   pluginName: "bitfab",
   marketplacePreRegistered: false,
+  pluginUpdateCommands: [],
 }
