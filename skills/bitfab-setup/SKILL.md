@@ -177,10 +177,10 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
 
     The trace plan's `Files changed:` list must include the replay script path for this cycle (new or edited) alongside the instrumented files.
 12. Tell the user how to run the app to generate the first trace AND, once traces exist, how to run the replay script for this pipeline — give exact command(s) for both. Do NOT run them yourself. (Omit the replay command for Go-only projects.)
-13. **MANDATORY STOP — never silently end the cycle without the A/B/C/D prompt.** Check whether traces already exist for the current trace function key via `mcp__plugin_bitfab_Bitfab__search_traces` (or `list_trace_functions`) — the **only** place the skill calls these tools. An empty result is expected (the user hasn't run the app yet) and means "offer option A," not "skip step 13." Then use AskUserQuestion:
+13. **MANDATORY STOP — never silently end the cycle without the A/B/C/D prompt.** Use AskUserQuestion:
     > We recommend **A**: generate traces before instrumenting the next workflows - [one-line reason].
     >
-    > A) **Generate traces [current workflow]** — [present the script to run to the user. Allow them to let you to run it for them.] *(omit if traces already exist)*
+    > A) **Generate traces [current workflow]** — [present the script to run to the user. Allow them to let you to run it for them.] Before starting the wait, tell the user verbatim: `Polling for first trace (up to ~10 min) — press Esc to cancel.` Then run with `Bash` (timeout: 660000ms): `node "${CURSOR_PLUGIN_ROOT}/dist/commands/waitForTrace.js" <trace-function-key>`. The command blocks inside Node — polling Bitfab every 10s until a trace lands or the ~10 min timeout fires — so no agent tokens are burned while waiting. When it exits, parse the final stdout line as JSON: `{"status":"found","traceId":"…","url":"…"}` → report the trace URL; `{"status":"timeout",…}` → note that no trace arrived yet; `{"status":"interrupted",…}` → the user cancelled.
     > B) **Instrument [next workflow]** — [why it's the next highest value]
     > C) **Instrument [other workflow]** — [alternative]
     > D) **Done instrumenting — proceed to Replay** (in `all` mode) / **Done** (in `instrument` mode)
