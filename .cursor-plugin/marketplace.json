@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Automated regression testing and improvements for your prompts, context, and tool calls.",
-    "version": "0.2.7"
+    "version": "0.2.8"
   },
   "plugins": [
     {
       "name": "bitfab",
       "source": "./",
       "description": "Automated regression testing and improvements for your prompts, context, and tool calls.",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "homepage": "https://github.com/Project-White-Rabbit/bitfab-cursor-plugin",
       "repository": "https://github.com/Project-White-Rabbit/bitfab-cursor-plugin",
       "license": "MIT",
