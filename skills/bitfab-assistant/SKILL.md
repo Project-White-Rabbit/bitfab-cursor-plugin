@@ -1,6 +1,6 @@
 ---
 name: bitfab-assistant
-description: "Iterate on a traced Bitfab function. Usage: /bitfab-assistant [all|dataset|experiment] [<trace-function-key>] [<dataset-id>]"
+description: "Fix and experiment on code, or ask for guidance"
 ---
 
 # Bitfab Assistant
