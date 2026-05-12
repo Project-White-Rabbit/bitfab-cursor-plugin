@@ -34,6 +34,54 @@
           }
         ]
       }
+    ],
+    "preToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CURSOR_PLUGIN_ROOT}/scripts/capture-hook PreToolUse",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CURSOR_PLUGIN_ROOT}/scripts/capture-hook Stop",
+            "async": false
+          }
+        ]
+      }
+    ],
+    "subagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CURSOR_PLUGIN_ROOT}/scripts/capture-hook SubagentStop",
+            "async": false
+          }
+        ]
+      }
+    ],
+    "preCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CURSOR_PLUGIN_ROOT}/scripts/capture-hook PreCompact",
+            "async": false
+          }
+        ]
+      }
     ]
   }
 }
