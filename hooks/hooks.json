@@ -3,17 +3,7 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CURSOR_PLUGIN_ROOT}/scripts/session-start",
-            "async": false
-          }
-        ]
-      },
-      {
-        "matcher": "resume",
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
