@@ -85,7 +85,7 @@ Authenticate with Bitfab and retrieve the API key.
    node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/login.js"
    ```
 
-   This opens the browser for OAuth and waits for the loopback callback. Run with 600000ms timeout (10 minutes). If the command **exits with an error**, **fails to reach the browser**, or **times out** — fall through to the **Login (headless)** flow below. This commonly happens on SSH sessions, sandboxed environments, cloud IDEs, and Codespaces where the browser can't reach the CLI's loopback port.
+   This opens Studio for sign-in and polls until authentication completes. Run with 600000ms timeout (10 minutes). If the command **exits with an error** or **times out**, fall through to the **Login (headless)** flow below.
 3. Call `mcp__Bitfab__get_bitfab_api_key` to retrieve the API key — **NEVER print or log the full key**. Stored at `~/.config/bitfab/credentials.json`, used for the `BITFAB_API_KEY` environment variable.
 4. Check whether session log consent has already been recorded:
 
@@ -114,7 +114,7 @@ Use this flow when the browser callback can't reach the terminal — SSH session
 
 1. Determine the service URL. Default is `https://bitfab.ai`. If the user has a custom deployment, read it from `~/.config/bitfab/config.json` (field `serviceUrl`) or the `BITFAB_SERVICE_URL` environment variable.
 2. Tell the user:
-   > Open this URL in a browser on any device: **{serviceUrl}/plugin/auth/cursor**
+   > Open this URL in a browser on any device: **{serviceUrl}/studio/auth/cursor**
    >
    > Sign in with your Bitfab account. The page will show an API key with a copy button. Paste the token here when you have it.
 3. Wait for the user's next message — it will contain the token. Do NOT use `AskUserQuestion` here (it adds an unnecessary extra step before the user can paste).
@@ -242,7 +242,7 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
 
    **One flow = one trace function key.** When an outer `@bitfab.span` / `withSpan` / `bitfab_span` and a framework handler wrap the same work (LangGraph `get_langgraph_callback_handler`, Claude Agent SDK `get_claude_agent_handler`), pass the **same key** to both — a second key splits one flow into two overlapping trace functions. Separate trace functions describe separate flows with their own standalone roots, never a sub-range of an outer flow.
 
-   Then post the plan to the browser confirmation UI via `mcp__Bitfab__create_trace_plan` and open it with the `openTracePlan.js` CLI — that command races a loopback callback and a server-polled handoff ticket so the browser → CLI hand-off works on SSH, Docker, WSL, cloud IDEs, etc. Same delivery pattern as `login.js` and `startDataset.js`.
+   Then post the plan to the browser confirmation UI via `mcp__Bitfab__create_trace_plan` and open it with the `openTracePlan.js` CLI, which navigates Studio to the trace plan page and polls for the user's Confirm/Cancel decision via agent session events.
 
    - Build a `TracePlanTree` (`{ rootId, nodes: { [id]: TraceNode } }`) from the same span tree you'd otherwise render. Each `TraceNode` carries `id` (stable, e.g. hash of `file:line:name`), `name`, `kind` ("manual" | "auto" | "pure"), `file`, `line`, `signature`, `parentId`, `childIds`, plus `framework` (for `[auto]` lines).
    - **Every captured node MUST include `sampleInput` and `sampleOutput`.** Without samples the confirmation page can't show the user what gets captured, which is the whole point. Construct realistic example values from the function's parameter and return types (Read the file and its return-type imports if needed); for SDK calls (`openai.chat.completions.create`, `generateText`, `cohere.rerank`, etc.) use the documented response shape. Do NOT call `create_trace_plan` with a captured node missing either field.
@@ -258,7 +258,7 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
    node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/openTracePlan.js" <planId>
    ```
 
-   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id returned by `mcp__Bitfab__create_trace_plan`.) The script opens the trace plan page and **blocks** until the user clicks **Confirm** or **Chat about this** in the browser.
+   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id returned by `mcp__Bitfab__create_trace_plan`.) The script navigates Studio to the trace plan page and **blocks** until the user clicks **Confirm** or **Chat about this**.
 
    - On exit, parse the final stdout line:
      - `Trace plan confirmed [via …]` — the user confirmed in the browser. Call `mcp__Bitfab__get_trace_plan` with the plan id to read the authoritative `capturedNodeIds` for step 11. If it differs from your initial recommendation, prune `[auto]` lines whose ancestor manual span was uncaptured, and drop manual `●` wraps that aren't in the set.
@@ -345,7 +345,7 @@ Every Modify cycle targets **exactly one** trace function. Never batch multiple 
    node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/openTracePlan.js" <planId>
    ```
 
-   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id returned by `mcp__Bitfab__create_trace_plan`.) The script opens the trace plan page and **blocks** until the user clicks **Confirm** or **Cancel** in the browser.
+   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id returned by `mcp__Bitfab__create_trace_plan`.) The script navigates Studio to the trace plan page and **blocks** until the user clicks **Confirm** or **Cancel**.
 
    3. **On exit, route by the final stdout line:**
       - `Trace plan confirmed [via …]` — call `mcp__Bitfab__get_trace_plan` with `{ planId }` to read the authoritative `capturedNodeIds` (the user may have toggled `pure` context nodes into the captured set or removed previously-captured nodes in the UI). Reconcile your edit plan with what's now in `capturedNodeIds` — drop manual `●` wraps no longer captured, add wraps for any newly captured nodes — then take branch **A** (Proceed).
@@ -388,7 +388,7 @@ Every View invocation targets **exactly one** trace function. The browser UI's C
    node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/openTracePlan.js" <planId>
    ```
 
-   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id parsed from step 3.) The script opens the trace plan page and **blocks** until the user closes the browser tab or clicks Confirm/Cancel. View is read-only — whichever button the user clicks, do **not** apply edits or call `mcp__Bitfab__get_trace_plan` again. When the process exits, report that the plan was viewed and stop.
+   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id parsed from step 3.) The script navigates Studio to the trace plan page and **blocks** until the user closes Studio or clicks Confirm/Cancel. View is read-only; whichever button the user clicks, do **not** apply edits or call `mcp__Bitfab__get_trace_plan` again. When the process exits, report that the plan was viewed and stop.
 
 ## Replay
 
@@ -471,7 +471,7 @@ Templates control how a span's input / output renders in the Bitfab UI. They are
 
    Run this as a background process and capture the handle plus its stdout so you can poll its status between edit rounds.
 
-   The command **blocks until the user clicks the Close button on the page**, then exits 0 with a single line like `Template preview closed [via loopback]`. If the user instead just closes the browser tab without clicking Close, the process keeps running until the 30-minute timeout. The page auto-redirects to the most recent trace for the function and renders it with the org's current templates; it subscribes to SSE `template:updated` events and re-renders the affected span automatically, so the user does NOT need to refresh after each edit.
+   The command **blocks until the user clicks Done in Studio**, then exits 0 with a single line like `Template preview closed [via studio]`. If the user instead just closes the browser tab without clicking Close, the process keeps running until the 30-minute timeout. The page auto-redirects to the most recent trace for the function and renders it with the org's current templates; it subscribes to SSE `template:updated` events and re-renders the affected span automatically, so the user does NOT need to refresh after each edit.
 
    🚨 **Stdout is a mixed JSONL + free-form stream.** Two event shapes flow over the same channel as the user interacts with the live preview:
 
