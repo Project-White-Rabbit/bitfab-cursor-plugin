@@ -40,7 +40,7 @@ If any `navigateStudio.js` call outputs `{"event":"not-responding",...}`, the St
 1. **If you already have a `sessionId` in context** from a previous `studio/open` step in this conversation, skip opening a new Studio. Instead, navigate the existing session to the desired page:
 
    ```bash
-   node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/navigateStudio.js" <sessionId> <initialPath>
+   node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/node_modules/bitfab-plugin-lib/dist/commands/navigateStudio.js" <sessionId> <initialPath>
    ```
 
    This outputs JSON on stdout:
@@ -78,7 +78,7 @@ If any `navigateStudio.js` call outputs `{"event":"not-responding",...}`, the St
    **Recovering after compaction:** If the Studio is already open from a prior context window but you've lost the `sessionId`, recover it:
 
    ```bash
-   node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/recoverStudio.js" <agentSessionId>
+   node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/node_modules/bitfab-plugin-lib/dist/commands/recoverStudio.js" <agentSessionId>
    ```
 
    It prints `{"studioSessionId":"...","agentSessionId":"..."}`. Use `studioSessionId` for all subsequent `navigateStudio.js` and `pushActivity.js` calls. If it returns `{"error":"no-active-studio"}`, the Studio was never opened or has been closed; open a new one.
