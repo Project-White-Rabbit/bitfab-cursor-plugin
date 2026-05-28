@@ -33,6 +33,15 @@ In sub-modes that take a function key, grep the codebase for `<key>` early so la
 **Opening a trace plan, when asked.** Opening trace plans is part of this skill, not a separate primitive — but only do it when the user asks (or the context clearly implies it, e.g. they said "show me what's captured"). Never auto-open. When triggered, run two sequential calls (step 2 needs the planId from step 1, so they can't be batched): (1) `mcp__Bitfab__get_trace_plan` with `{ traceFunctionKey: "<key>" }` returns the plan id, then (2) `openStudioTo.js "/studio/trace-plan/<planId>"` (substituting the id from step 1) routes Studio there in-place. The command finds an active session or opens a new one automatically. The Studio chrome (header, session indicator, agent activity) stays mounted around the trace plan content. No questions, no preamble, no summary up-front. If no plan exists for the key, say so in one line and offer `/bitfab-setup modify <key>` to build one.
 
 
+**CLI commands** available via Bash (all paths relative to `${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/`):
+
+| Command | Description |
+|---------|-------------|
+| `status.js` | Check plugin authentication and connection status |
+| `openStudioTo.js <path> [agentSessionId]` | Navigate an existing Studio session or open a new one at the given path |
+| `pushActivity.js {action} "{displayName}"` | Emit activity events to the Studio sidebar |
+| `persistReplayLabels.js <verdicts-file>` | Persist replay verdicts from a JSON file to Bitfab via MCP |
+
 ## Studio Lifecycle
 
 The Studio is the companion browser surface for the entire assistant flow. It opens once at the start and stays open throughout all phases. Individual phases navigate the Studio to the relevant page (dataset review, experiment viewer, etc.) using `openStudioTo.js`.

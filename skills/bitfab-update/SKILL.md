@@ -13,6 +13,12 @@ Update the Bitfab Cursor plugin and/or every workspace's SDK in the current proj
 | `/bitfab-update plugin` | Plugin update only — skips all SDK steps |
 | `/bitfab-update sdk` | SDK update only — skips the plugin check |
 
+**CLI commands** available via Bash (all paths relative to `${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/`):
+
+| Command | Description |
+|---------|-------------|
+| `update.js <mode>` | Run the plugin/SDK update script (checks versions, installs latest) |
+
 ## 1. Run the update script
 
 Pass the mode argument the user invoked through to the script (omit for the default `all`):
