@@ -264,7 +264,7 @@ Bitfab captures every AI function call — inputs, outputs, and errors — so yo
 
    (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id returned by `mcp__Bitfab__create_trace_plan`.) The script navigates Studio to the trace plan page and **blocks** until the user clicks **Confirm** or **Chat about this**.
 
-   - The script emits JSONL to stdout. The first line is `{"event":"session-ready","sessionId":"<uuid>"}` once the Studio session is established. On exit, parse the final JSON line:
+   - The script emits JSONL to stdout. The first line is `{"event":"session-ready","sessionId":"<uuid>"}` once the Studio session is established (on a logged-out run, an `{"event":"auth-required",...}` then `{"event":"authenticated",...}` line precede it while the user signs in — keep waiting for `session-ready`). On exit, parse the final JSON line:
      - `{"event":"confirmed","planId":"<uuid>"}` — the user confirmed in the browser. The `planId` may differ from the original if a mid-session `create_trace_plan` call created a new plan (the script auto-tracks the latest plan via `tracePlan:created` events). Call `mcp__Bitfab__get_trace_plan` with the returned `planId` to read the authoritative `capturedNodeIds` for step 11. If it differs from your initial recommendation, prune `[auto]` lines whose ancestor manual span was uncaptured, and drop manual `●` wraps that aren't in the set.
      - `{"event":"cancelled","planId":"<uuid>"}` — the user aborted from the browser. Tell them the trace setup was dropped and ask what they'd like to do instead. Do not write instrumentation.
      - non-zero exit (including `{"event":"timeout",...}`) — surface the error to the user. Do not write instrumentation.
@@ -460,7 +460,7 @@ Every View invocation targets **exactly one** trace function. The browser UI's C
    node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/openTracePlan.js" <planId>
    ```
 
-   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id parsed from step 3.) The script emits JSONL to stdout. The first line is `{"event":"session-ready","sessionId":"<uuid>"}`. The script navigates Studio to the trace plan page and **blocks** until the user closes Studio or clicks Confirm/Cancel. View is read-only; whichever button the user clicks (the final JSONL line will be `{"event":"confirmed",...}` or `{"event":"cancelled",...}`), do **not** apply edits or call `mcp__Bitfab__get_trace_plan` again. When the process exits, report that the plan was viewed and stop.
+   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id parsed from step 3.) The script emits JSONL to stdout. The first line is `{"event":"session-ready","sessionId":"<uuid>"}` (on a logged-out run, an `{"event":"auth-required",...}` then `{"event":"authenticated",...}` line precede it — keep waiting for `session-ready`). The script navigates Studio to the trace plan page and **blocks** until the user closes Studio or clicks Confirm/Cancel. View is read-only; whichever button the user clicks (the final JSONL line will be `{"event":"confirmed",...}` or `{"event":"cancelled",...}`), do **not** apply edits or call `mcp__Bitfab__get_trace_plan` again. When the process exits, report that the plan was viewed and stop.
 
 ## Replay
 
