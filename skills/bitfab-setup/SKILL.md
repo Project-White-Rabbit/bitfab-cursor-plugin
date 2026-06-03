@@ -10,6 +10,8 @@ description: "Set up and maintain Bitfab tracing for AI features. TRIGGER when: 
 - Present 2-5 concrete options
 - One decision per question — never batch
 
+**Studio gate recovery (applies to every Studio-opening command).** Any command that opens or navigates Studio (`openTracePlan.js`, `startTemplatePreview.js`, etc.) emits `{"event":"not-responding","sessionId":"..."}` and exits non-zero when a Studio session is recorded but its window can't be reached (a crash, sleep, or a close no process witnessed). It will NOT open a duplicate window. **This is a gate, not a failure to retry blindly.** Recommend the user refresh or reopen the Studio tab, then use `AskUserQuestion` with two options: **Try again** (re-run the same command — the record is still on disk, so a window that came back gets reused) or **Open a new Studio** (run `node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/clearStudioSession.js"` to drop the stale pointer, then re-run the command, which now opens a fresh window). Only clear the pointer after the user approves.
+
 This skill has nine phases: **explain**, **login**, **session-logs**, **instrument**, **modify**, **inspect**, **view**, **replay**, and **templates**. Run individually or all at once (`wizard` runs login → instrument → replay; `explain` is a standalone read-only overview that requires no login; `session-logs` is standalone and does not require login; `modify` is only invoked explicitly or as a branch from the Instrument step 2 menu; `inspect` is a standalone diagnostic (with optional one-shot fixes) invoked explicitly; `view` is only invoked explicitly; `templates` is only invoked explicitly).
 
 **Natural-language aliases (these reuse an existing mode, not a separate one):** "explain Bitfab" / "what is Bitfab" → `explain`; "trace a new workflow" / "instrument a new flow" → `instrument`; "update-setup" / "update my tracing setup" / "adjust what's captured" → `modify` (NOT a plugin/SDK *version* bump — that's `/bitfab-update`); "debug-setup" / "debug my tracing setup" / "inspect my tracing" / "why aren't my traces showing up" / "what's instrumented" → `inspect` (for output-*quality* debugging use `/bitfab-assistant` instead).
@@ -47,6 +49,7 @@ Within an Instrument cycle, **instrumentation and the replay pipeline for the cy
 | `waitForTrace.js <trace-function-key>` | Poll for the first trace to arrive (blocks up to ~10 min) |
 | `startTemplatePreview.js <functionKey>` | Open the template editor preview in Studio (blocks until user clicks Done) |
 | `closeStudio.js <sessionId>` | Close the Studio browser tab for an agent session |
+| `clearStudioSession.js` | Clear the stale active-Studio pointer so the next open starts fresh |
 | `update.js <mode>` | Check plugin + SDK versions and install the latest (used by inspect to detect and fix staleness) |
 
 ## Preamble
