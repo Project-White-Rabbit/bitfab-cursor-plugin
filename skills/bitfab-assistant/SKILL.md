@@ -95,10 +95,12 @@ The gate fires only when a recorded window went unreachable with **no close sign
    Open Studio at the initial path for this mode. `openStudioTo.js` is the single entry point for all Studio operations: it navigates an existing session or opens a new one automatically.
 
    ```bash
-   node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/openStudioTo.js" <path>
+   node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/openStudioTo.js" <path> --monitor
    ```
 
    The command resolves this agent's active session on its own and reads auth from local config — no session id or credentials to pass.
+
+   **The `--monitor` flag is load-bearing and belongs ONLY on this step.** This is the one step that establishes the durable event loop for the whole run. `--monitor` makes it the single monitor whether it opens a fresh window OR reuses one left over from a prior run — without it, reusing an existing window would navigate-and-exit and the run would have NO monitor, silently missing Done / Edit-with-agent / session-ended. Every later `node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/openStudioTo.js"` call (dataset page, experiments page, trace plans) is a plain navigation: omit `--monitor` so it fires-and-exits instead of spawning a duplicate poller.
 
    **The path MUST start with `/studio`.** Never pass `/`, a bare URL, or any path outside the `/studio/` route tree.
 
@@ -110,7 +112,7 @@ The gate fires only when a recorded window went unreachable with **no close sign
 
    `replay` mode never reaches this step (it runs entirely in-chat with no Studio session) — see Phase Replay.
 
-   If no active Studio session exists, the command opens a new one and enters an event loop (stays running). Run it as a long-running terminal process. If an active session already exists, it navigates and exits immediately.
+   With `--monitor` this command enters an event loop and stays running for the whole session — whether it opened a fresh window or reused an existing one. Run it as a long-running terminal process. It is the single backgrounded process for the run; the later navigation steps (without `--monitor`) exit immediately.
 
    The script outputs JSON lines on stdout (see the Studio Lifecycle intro for the full event reference):
 
