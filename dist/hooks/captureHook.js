@@ -1,2 +1,3 @@
 import { runCaptureHook } from "bitfab-plugin-lib";
-await runCaptureHook(process.argv[2], "cursor");
+import { getVersion } from "../version.js";
+await runCaptureHook(process.argv[2], "cursor", undefined, getVersion());
