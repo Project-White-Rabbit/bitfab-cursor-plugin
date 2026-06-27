@@ -1,7 +1,7 @@
 {
   "name": "bitfab",
   "description": "Automated regression testing and improvements for your prompts, context, and tool calls.",
-  "version": "0.8.70",
+  "version": "0.8.71",
   "author": {
     "name": "Bitfab"
   },
