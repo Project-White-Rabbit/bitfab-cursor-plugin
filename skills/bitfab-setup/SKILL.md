@@ -18,6 +18,8 @@ description: "Set up and maintain Bitfab tracing for AI features. TRIGGER when: 
 
 **Studio gate recovery (applies to every Studio-opening command).** Any command that opens or navigates Studio (`openTracePlan.js`, `startTemplatePreview.js`, etc.) emits `{"event":"not-responding","sessionId":"..."}` and exits non-zero when a Studio session is recorded but its window can't be reached (a crash, sleep, or a close no process witnessed). It will NOT open a duplicate window. **This is a gate, not a failure to retry blindly.** Recommend the user refresh or reopen the Studio tab, then use `AskUserQuestion` with two options: **Try again** (re-run the same command, the record is still on disk, so a window that came back gets reused) or **Open a new Studio** (run `node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/clearStudioSession.js"` to drop the stale pointer, then re-run the command, which now opens a fresh window). Only clear the pointer after the user approves.
 
+**Studio URL surfacing (applies to every fresh Studio open).** If any Studio-opening command emits `{"event":"window-opened","url":"..."}`, immediately surface that URL to the user in a normal chat message (for example, `Studio opened: <url>`) so it is copyable from the transcript. Do this every time the event appears, even if the browser opened successfully; do not leave the URL only in shell/tool output.
+
 This skill has eleven phases: **explain**, **login**, **session-logs**, **instrument**, **modify**, **inspect**, **switch-org**, **view**, **replay**, **db-snapshot**, and **templates**. Run individually or all at once (`wizard` runs login → instrument → replay; `explain` is a standalone read-only overview that requires no login; `session-logs` is standalone and does not require login; `modify` is only invoked explicitly or as a branch from Instrument's existing-SDK-usage menu; `inspect` is a standalone diagnostic (with optional one-shot fixes) invoked explicitly; `switch-org` is a standalone account action (requires auth) invoked explicitly; `view` is only invoked explicitly; `db-snapshot` is only invoked explicitly; `templates` is only invoked explicitly).
 
 **Natural-language aliases (these reuse an existing mode, not a separate one):** "explain Bitfab" / "what is Bitfab" → `explain`; "trace a new workflow" / "instrument a new flow" → `instrument`; "update-setup" / "update my tracing setup" / "adjust what's captured" → `modify` (NOT a plugin/SDK *version* bump, that's `/bitfab-update`); "debug-setup" / "debug my tracing setup" / "inspect my tracing" / "why aren't my traces showing up" / "what's instrumented" → `inspect` (for output-*quality* debugging use `/bitfab-assistant` instead); "switch org" / "change org" / "switch to the <name> org" / "I'm in the wrong org" → `switch-org`; "set up db snapshots" / "set up db branching" / "replay against my database" / "replay against the database at trace time" / "database snapshots for replay" → `db-snapshot`.
@@ -153,8 +155,12 @@ Authenticate with Bitfab and retrieve the API key.
    ```bash
    node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/login.js"
    ```
+   Run with 600000ms (10 minute) timeout. This opens Studio to the sign-in page and polls the server until the user completes authentication in the browser. The process exits when authentication succeeds or the 10-minute timeout fires.
 
-   This opens Studio for sign-in and polls until authentication completes. Run with 600000ms timeout (10 minutes). If the command **exits with an error** or **times out**, report the error to the user and stop.
+   **If the browser fails to open**, `login.js` prints the Studio sign-in URL. Surface it to the user verbatim so they can open it manually; do not rely on shell/tool output being visible. The polling loop stays active for the full 10-minute timeout regardless of whether auto-launch worked.
+
+
+   If `login.js` exits non-zero or the 10-minute timeout elapsed, report the error to the user and stop.
 3. Call `mcp__Bitfab__get_bitfab_api_key` to retrieve the API key, **NEVER print or log the full key**. Stored at `~/.config/bitfab/credentials.json`, used for the `BITFAB_API_KEY` environment variable.
 4. Check whether session log consent has already been recorded:
 
@@ -301,7 +307,7 @@ Bitfab captures every AI function call, inputs, outputs, and errors, so you can 
 
    (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id returned by `mcp__Bitfab__create_trace_plan`.) The script navigates Studio to the trace plan page and **blocks** until the user clicks **Confirm** or **Chat about this**.
 
-   - The script emits JSONL to stdout. The first line is `{"event":"session-ready","sessionId":"<uuid>"}` once the Studio session is established (on a logged-out run, an `{"event":"auth-required",...}` then `{"event":"authenticated",...}` line precede it while the user signs in, keep waiting for `session-ready`). On exit, parse the final JSON line:
+   - The script emits JSONL to stdout. If it emits `{"event":"window-opened","url":"..."}`, immediately tell the user `Studio opened: <url>` in a normal chat message before continuing to poll. `{"event":"session-ready","sessionId":"<uuid>"}` appears once the Studio session is established (on a logged-out run, an `{"event":"auth-required",...}` then `{"event":"authenticated",...}` line precede it while the user signs in, keep waiting for `session-ready`). On exit, parse the final JSON line:
      - `{"event":"confirmed","planId":"<uuid>"}`, the user confirmed in the browser. The `planId` may differ from the original if a mid-session `create_trace_plan` call created a new plan (the script auto-tracks the latest plan via `tracePlan:created` events). Call `mcp__Bitfab__get_trace_plan` with the returned `planId` to read the authoritative `capturedNodeIds` for step 13. If it differs from your initial recommendation, prune `[auto]` lines whose ancestor manual span was uncaptured, and drop manual `●` wraps that aren't in the set.
      - `{"event":"cancelled","planId":"<uuid>"}`, the user aborted from the browser. Tell them the trace setup was dropped and ask what they'd like to do instead. Do not write instrumentation.
      - non-zero exit (including `{"event":"timeout",...}`), surface the error to the user. Do not write instrumentation.
@@ -416,7 +422,7 @@ Every Modify cycle targets **exactly one** trace function. Never batch multiple 
    node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/openTracePlan.js" <planId>
    ```
 
-   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id returned by `mcp__Bitfab__create_trace_plan`.) The script navigates Studio to the trace plan page and **blocks** until the user clicks **Confirm** or **Cancel**.
+   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id returned by `mcp__Bitfab__create_trace_plan`.) The script navigates Studio to the trace plan page and **blocks** until the user clicks **Confirm** or **Cancel**. If it emits `{"event":"window-opened","url":"..."}`, immediately tell the user `Studio opened: <url>` in a normal chat message before continuing to poll.
 
    3. **On exit, parse the final JSONL line and route:**
       - `{"event":"confirmed","planId":"<uuid>"}`, call `mcp__Bitfab__get_trace_plan` with the returned `planId` (which may differ from the original if a mid-session `create_trace_plan` created a new plan; `openTracePlan.js` auto-tracks the latest plan via `tracePlan:created` events) to read the authoritative `capturedNodeIds` (the user may have toggled `pure` context nodes into the captured set or removed previously-captured nodes in the UI). Reconcile your edit plan with what's now in `capturedNodeIds`, drop manual `●` wraps no longer captured, add wraps for any newly captured nodes, then take branch **A** (Proceed).
@@ -584,7 +590,7 @@ Every View invocation targets **exactly one** trace function. The browser UI's C
    node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/openTracePlan.js" <planId>
    ```
 
-   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id parsed from step 3.) The script emits JSONL to stdout. The first line is `{"event":"session-ready","sessionId":"<uuid>"}` (on a logged-out run, an `{"event":"auth-required",...}` then `{"event":"authenticated",...}` line precede it, keep waiting for `session-ready`). The script navigates Studio to the trace plan page and **blocks** until the user closes Studio or clicks Confirm/Cancel. View is read-only; whichever button the user clicks (the final JSONL line will be `{"event":"confirmed",...}` or `{"event":"cancelled",...}`), do **not** apply edits or call `mcp__Bitfab__get_trace_plan` again. When the process exits, report that the plan was viewed and stop.
+   (`${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` resolves to the plugin directory; `<planId>` is the id parsed from step 3.) The script emits JSONL to stdout. If it emits `{"event":"window-opened","url":"..."}`, immediately tell the user `Studio opened: <url>` in a normal chat message before continuing to poll. `{"event":"session-ready","sessionId":"<uuid>"}` appears once the Studio session is established (on a logged-out run, an `{"event":"auth-required",...}` then `{"event":"authenticated",...}` line precede it, keep waiting for `session-ready`). The script navigates Studio to the trace plan page and **blocks** until the user closes Studio or clicks Confirm/Cancel. View is read-only; whichever button the user clicks (the final JSONL line will be `{"event":"confirmed",...}` or `{"event":"cancelled",...}`), do **not** apply edits or call `mcp__Bitfab__get_trace_plan` again. When the process exits, report that the plan was viewed and stop.
 
 ## Replay
 
@@ -771,6 +777,8 @@ Templates control how a span's input / output renders in the Bitfab UI. They are
    ```
 
    Run this as a background process and capture the handle plus its stdout so you can poll its status between edit rounds.
+
+   If stdout emits `{"event":"window-opened","url":"..."}`, immediately tell the user `Studio opened: <url>` in a normal chat message before continuing to poll.
 
    The command **blocks until the user clicks Done in Studio**, then exits 0 with a single line like `Template preview closed [via studio]`. If the user instead just closes the browser tab without clicking Close, the process keeps running until the 30-minute timeout. The page auto-redirects to the most recent trace for the function and renders it with the org's current templates; it subscribes to SSE `template:updated` events and re-renders the affected span automatically, so the user does NOT need to refresh after each edit.
 
