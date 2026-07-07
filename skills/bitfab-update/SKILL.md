@@ -19,6 +19,16 @@ Update the Bitfab Cursor plugin and/or every workspace's SDK in the current proj
 |---------|-------------|
 | `update.js <mode>` | Run the plugin/SDK update script (checks versions, installs latest) |
 
+## Modes
+
+Read `$ARGUMENTS` first. If its first token is exactly one of the mode names below, run that mode. Otherwise, when this skill documents how to route the remaining arguments (see its intro), follow that; if it doesn't, run `all` and treat `$ARGUMENTS` as its input. Run only that mode's section below and skip the others.
+
+| Mode | Trigger | What it does |
+|------|---------|--------------|
+| `all` | `all` (default) | Update both the Bitfab plugin and the SDK to the latest versions. |
+| `plugin` | `plugin` | Update only the Bitfab plugin to the latest version. |
+| `sdk` | `sdk` | Update only the Bitfab SDK to the latest version. |
+
 ## Setup
 
 1. Pass the mode argument the user invoked through to the script (omit for the default `all`):
