@@ -96,7 +96,7 @@ Read `$ARGUMENTS` first. If its first token is exactly one of the mode names bel
    | go | `go.mod` | `go list -m -u -json github.com/Project-White-Rabbit/bitfab-go` |
 
    Use the real latest from the command's output in place of `latest` when deciding whether to offer an upgrade.
-4. If there are **3 or more** workspaces with `updateAvailable: true`, ask with `AskUserQuestion` : **one decision per question**:
+4. If there are **3 or more** workspaces with `updateAvailable: true`, ask with `AskQuestion` (or in plain text with lettered options if it is not available) : **one decision per question**:
 
    > A) **Update all N outdated workspaces** *(recommended)* → step 7
    > B) **Ask me per workspace** → step 5
@@ -105,7 +105,7 @@ Read `$ARGUMENTS` first. If its first token is exactly one of the mode names bel
    **Always recommend "Update all" (option A).** Do not downgrade the recommendation based on the range specifier or lockfile shape, not for `workspace:*` / `workspace:^`, not for git refs, not for pinned `"=X.Y.Z"`, not for path deps. An outdated SDK is an outdated SDK. If the user is working inside a monorepo where the dep is workspace-linked to a sibling SDK package, they are free to pick **Skip** themselves, but the recommended action is still **Update**.
 
    If there are **fewer than 3** outdated workspaces, skip this prompt and go straight to per-workspace.
-5. For the next workspace with `updateAvailable: true`, ask with `AskUserQuestion` : **one decision per question**:
+5. For the next workspace with `updateAvailable: true`, ask with `AskQuestion` (or in plain text with lettered options if it is not available) : **one decision per question**:
 
    > We recommend **Update**: `<workspacePath>`, `<language>` SDK `<current>` → `<latest>`.
    > If `renameFrom` is set, append: (also renames `<renameFrom>` → `<packageName>`)

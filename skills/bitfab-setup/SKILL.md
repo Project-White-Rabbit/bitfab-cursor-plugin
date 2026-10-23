@@ -5,7 +5,7 @@ description: "Set up and maintain Bitfab tracing, replay registries, and cloud r
 
 # Bitfab Setup
 
-**Always use `AskUserQuestion` when asking questions or presenting choices** (one exception: a step that explicitly says its answer is free-form, such as asking which file or function to instrument once the user has said they know, asks in plain chat and waits, because a menu there would stand between the user and the answer only they hold). Never print a question as text and wait. Rules:
+**Always use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) when asking questions or presenting choices** (one exception: a step that explicitly says its answer is free-form, such as asking which file or function to instrument once the user has said they know, asks in plain chat and waits, because a menu there would stand between the user and the answer only they hold). Never print a question as text and wait. Rules:
 - Recommend an option first, explain why in one line
 - Present 2-5 concrete options
 - One decision per question, never batch
@@ -125,7 +125,7 @@ Authenticate with Bitfab and retrieve the API key.
    node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/sessionLogConsent.js" get
    ```
 
-   If the output is already `true` or `false`, skip the prompt and continue. If the output is `null`, use `AskUserQuestion`:
+   If the output is already `true` or `false`, skip the prompt and continue. If the output is `null`, use `AskQuestion` (or, if it is not available, ask in plain text with lettered options):
    - **Question:** "Allow Bitfab to collect session logs?"
    - **Description:** Used to diagnose issues and improve the product.
    - **Options:** "Allow" / "Don't allow"
@@ -142,7 +142,7 @@ Authenticate with Bitfab and retrieve the API key.
 
 Teach the opt-out tracing and replay primitives the user instruments with. Read-only, no code changes, no browser interaction. Runs inside `wizard` (right after Login, before the approach question) and standalone via `/bitfab-setup explain` (or natural-language asks like "what is Bitfab" / "explain Bitfab"), which needs no authentication.
 
-1. Render the block below **verbatim** as a single message, as formatted markdown (do **not** wrap it in a code fence, do **not** reword it, and do **not** add a summary or an ASCII diagram). This is the education the rest of setup depends on: a user who does not understand `withTrace`, `withNode`, and `replay` cannot make the capture and replay decisions instrumentation asks of them. Do **not** authenticate, scan the codebase, use AskUserQuestion, or edit anything here, in either mode.
+1. Render the block below **verbatim** as a single message, as formatted markdown (do **not** wrap it in a code fence, do **not** reword it, and do **not** add a summary or an ASCII diagram). This is the education the rest of setup depends on: a user who does not understand `withTrace`, `withNode`, and `replay` cannot make the capture and replay decisions instrumentation asks of them. Do **not** authenticate, scan the codebase, use AskQuestion, or edit anything here, in either mode.
 
    ```markdown
    **Purpose**
@@ -200,7 +200,7 @@ Teach the opt-out tracing and replay primitives the user instruments with. Read-
 
 Settle who does the instrumenting before any code is read or written. Runs once, in `wizard` mode only, after Login.
 
-1. The user is authenticated now. Use `AskUserQuestion` to settle who does the instrumenting:
+1. The user is authenticated now. Use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) to settle who does the instrumenting:
    - **Question:** "Want me to walk you through instrumenting, or would you rather do it yourself?"
 
    > A) **Walk me through it**: I drive the instrumentation end to end, checking with you at each decision *(recommended)* → step 2
@@ -240,7 +240,7 @@ Opt in or out of session log collection. Does not require authentication.
    node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/sessionLogConsent.js" get
    ```
 
-   If the output is `true`, tell the user session logs are currently **enabled**. If `false`, tell the user session logs are currently **disabled**. If `null`, tell the user no preference is recorded yet. Then use `AskUserQuestion`:
+   If the output is `true`, tell the user session logs are currently **enabled**. If `false`, tell the user session logs are currently **disabled**. If `null`, tell the user no preference is recorded yet. Then use `AskQuestion` (or, if it is not available, ask in plain text with lettered options):
    - **Question:** "Allow Bitfab to collect session logs?"
    - **Description:** Session logs help us diagnose issues and improve the product. They include prompts, responses, and tool calls from sessions where Bitfab tools are used.
    - **Options:** "Allow" / "Don't allow"
@@ -271,7 +271,7 @@ Bitfab captures every AI function call, inputs, outputs, and errors, so you can 
    - **BAML**: TS: `@boundaryml/baml`, `baml_client` import; Python: `baml-py`, `from baml_client import b`
    - **Vercel AI SDK**: TS: `ai`, `wrapLanguageModel`, `streamText`, `generateText` (TypeScript only)
 2. **Search for existing SDK usage** (`withTrace`, `trace`, `withNode`, `node`, `withSpan`, `@span`, `bitfab_span`, `client.Span`, `getFunction`, `get_function`, and the TypeScript transform/build adapter). In a monorepo, search **each application directory separately**: a root-level search can miss subdirectories. Classify each result as opt-out tracing, framework auto-capture, or opt-in spans. Existing spans elsewhere in the repository do not establish a house style for new instrumentation.
-   - If found: use `AskUserQuestion`, **listing the existing trace function keys inside the question's own text** (`<key>` · its root function, or its handler registration site for handler-only keys), so the user picks against the actual list instead of a message scrolled above the prompt:
+   - If found: use `AskQuestion` (or, if it is not available, ask in plain text with lettered options), **listing the existing trace function keys inside the question's own text** (`<key>` · its root function, or its handler registration site for handler-only keys), so the user picks against the actual list instead of a message scrolled above the prompt:
 
    > A) **Search for more workflows**: find workflows that aren't traced yet *(recommended)* → step 3
    > B) **I'll name the workflow to instrument**: type the file, function, or directory and I read only that, no codebase scan → step 3
@@ -399,7 +399,7 @@ Bitfab captures every AI function call, inputs, outputs, and errors, so you can 
 
 **Run only when mode is `wizard`, `instrument` or `modify`.**
 
-Adjust an **existing** trace setup. Requires existing SDK usage in the codebase, if none exists, run Instrument first. Triggered explicitly by `/bitfab-setup modify`, or selected from the AskUserQuestion at Instrument's existing-SDK-usage menu when existing SDK usage is found.
+Adjust an **existing** trace setup. Requires existing SDK usage in the codebase, if none exists, run Instrument first. Triggered explicitly by `/bitfab-setup modify`, or selected from the AskQuestion at Instrument's existing-SDK-usage menu when existing SDK usage is found.
 
 Every Modify cycle targets **exactly one** trace function. Never batch multiple trace functions in one cycle, if the user wants more, loop via the step 5 menu.
 
@@ -408,10 +408,10 @@ Every Modify cycle targets **exactly one** trace function. Never batch multiple 
    - **the key is already settled (passed as `/bitfab-setup modify <key>`, or named at Instrument's existing-SDK-usage menu)**: skip the which-function question, the user already answered it → step 3
    - **no instrumented trace functions exist (nothing to modify)**: continue → step 1 of the Cleanup phase
    - **one or more trace functions exist**: continue → step 2
-2. **Pick exactly ONE trace function to modify.** (You only reach this step when the key is not already settled; a key named at Instrument's existing-SDK-usage menu or passed as `/bitfab-setup modify <key>` routes past it.) Use `AskUserQuestion` with the list of existing keys. Recommend the one the user most recently instrumented (or the one most recently referenced in the current session) and explain why in one line.
+2. **Pick exactly ONE trace function to modify.** (You only reach this step when the key is not already settled; a key named at Instrument's existing-SDK-usage menu or passed as `/bitfab-setup modify <key>` routes past it.) Use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) with the list of existing keys. Recommend the one the user most recently instrumented (or the one most recently referenced in the current session) and explain why in one line.
 3. Read the chosen function, its root registration, wrappers, framework handler or processor, keyed client, and replay registry module directly from the current source. Inventory the captured calls and replay mocks that actually exist. The code is the source of truth. Reuse the existing function key and preserve unrelated user edits. Apply the requested change after checking the affected call signatures and replay dependencies.
 4. Apply the user-requested instrumentation changes to the current source. Follow the SDK reference and the existing framework integration. Preserve behavior, arguments, return values, error handling, and streaming semantics. Keep the same trace function key unless the user requested a rename, and update the replay registry module in the same change so it calls the production traced root with reconstructed dependencies. If the request requires a behavior-changing refactor, follow the refactor-confirmation appendix before making that refactor. Validate the affected code and report exactly what changed.
-5. Tell the user how to run the app to generate a trace with the modified setup, exact command(s). Do NOT run it yourself. Then **MANDATORY STOP**: use `AskUserQuestion`:
+5. Tell the user how to run the app to generate a trace with the modified setup, exact command(s). Do NOT run it yourself. Then **MANDATORY STOP**: use `AskQuestion` (or, if it is not available, ask in plain text with lettered options):
    > We recommend **A**: generate a trace with the modified setup so the diff is observable end-to-end.
 
    > A) **Generate a trace for the modified setup**: present the script to run; allow the user to let you run it *(recommended)* → step 1 of the Cleanup phase
@@ -488,17 +488,17 @@ This is about trace *delivery and setup health* (is the SDK wired up and current
    - **Want to change what's captured**: run `/bitfab-setup modify`.
 
    Then continue to the fix prompt. Inspect does not open Bitfab.
-6. If the report surfaced anything stale or missing (plugin behind, SDK out of date or on the legacy `bitfab` package, replay registry modules missing/incomplete, or TypeScript subtree capture not wired), use `AskUserQuestion` whether to apply them, each fix is then confirmed individually in the next step (nothing is changed blanket). If everything is healthy, skip the question and go straight to cleanup.
+6. If the report surfaced anything stale or missing (plugin behind, SDK out of date or on the legacy `bitfab` package, replay registry modules missing/incomplete, or TypeScript subtree capture not wired), use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) whether to apply them, each fix is then confirmed individually in the next step (nothing is changed blanket). If everything is healthy, skip the question and go straight to cleanup.
 
    > A) **Review and apply fixes**: go through each fix one at a time, confirming before any change *(recommended)* → step 7
    > B) **Just report**: make no changes → step 1 of the Cleanup phase
-7. **Apply fixes individually, confirm each before changing anything; never bundle them into one blanket change.** Go through only the items step 4 flagged as stale or missing, and for each, use `AskUserQuestion` (one decision per question) and apply only if the user approves. Skip any they decline and continue to the next.
+7. **Apply fixes individually, confirm each before changing anything; never bundle them into one blanket change.** Go through only the items step 4 flagged as stale or missing, and for each, use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) (one decision per question) and apply only if the user approves. Skip any they decline and continue to the next.
 
-   - **Plugin behind**: use `AskUserQuestion` to update; if yes, run `node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/update.js" plugin` and remind the user to restart Cursor so the new plugin loads.
-   - **SDK out of date** (`updateAvailable: true`, `renameFrom` null), name the workspace and the `current → latest` jump, then use `AskUserQuestion` to upgrade; if yes, run the package manager's upgrade from that workspace directory (the same commands `/bitfab-update` uses): npm / pnpm / yarn / bun `add @bitfab/sdk@latest`; uv / poetry / pip `bitfab-py@latest`; `bundle update bitfab`; `go get github.com/Project-White-Rabbit/bitfab-go@latest && go mod tidy`. Read the manifest afterward to confirm the new version. Each workspace is its own decision.
-   - **On the legacy `bitfab` package** (`renameFrom` non-null), this rewrites import sites, so **preview before touching code**: list every `from "bitfab"` / `require("bitfab")` site you would change, then use `AskUserQuestion` to proceed. If yes, remove the old package and add the new one in one step (e.g. `pnpm remove bitfab && pnpm add @bitfab/sdk@latest`, or the npm / yarn / bun equivalent) and rewrite those imports to `@bitfab/sdk`. Do this even when `current` already equals `latest`, the rename is the fix. (TypeScript-only; Python / Ruby / Go package names don't change.)
-   - **Replay missing or incomplete**: use `AskUserQuestion` to refresh; if yes, run `/bitfab-setup replay` to create or extend the scripts so every trace function key is covered (it is non-interactive).
-   - **Subtree capture not wired** (TypeScript), this edits a build file, so **preview before touching code**: name the workspace, the adapter you would use, and the exact config file or start script you would change, then use `AskUserQuestion` to proceed. If yes, use the installed SDK and wire the matching `@bitfab/sdk/transform` adapter: `@bitfab/sdk/transform/next` wrapping the existing `next.config`, the `/vite`, `/rollup`, `/rolldown`, `/esbuild`, `/bun`, `/webpack`, `/rspack`, `/rsbuild`, `/babel`, `/nest`, or `/typescript` entry in the existing build config, or `--import @bitfab/sdk/transform/register` on the real start command. Preserve every existing wrapper; never replace or bypass one. Python below 3.12 is a runtime upgrade, report it and do not attempt it.
+   - **Plugin behind**: use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) to update; if yes, run `node "${CURSOR_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/dist/commands/update.js" plugin` and remind the user to restart Cursor so the new plugin loads.
+   - **SDK out of date** (`updateAvailable: true`, `renameFrom` null), name the workspace and the `current → latest` jump, then use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) to upgrade; if yes, run the package manager's upgrade from that workspace directory (the same commands `/bitfab-update` uses): npm / pnpm / yarn / bun `add @bitfab/sdk@latest`; uv / poetry / pip `bitfab-py@latest`; `bundle update bitfab`; `go get github.com/Project-White-Rabbit/bitfab-go@latest && go mod tidy`. Read the manifest afterward to confirm the new version. Each workspace is its own decision.
+   - **On the legacy `bitfab` package** (`renameFrom` non-null), this rewrites import sites, so **preview before touching code**: list every `from "bitfab"` / `require("bitfab")` site you would change, then use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) to proceed. If yes, remove the old package and add the new one in one step (e.g. `pnpm remove bitfab && pnpm add @bitfab/sdk@latest`, or the npm / yarn / bun equivalent) and rewrite those imports to `@bitfab/sdk`. Do this even when `current` already equals `latest`, the rename is the fix. (TypeScript-only; Python / Ruby / Go package names don't change.)
+   - **Replay missing or incomplete**: use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) to refresh; if yes, run `/bitfab-setup replay` to create or extend the scripts so every trace function key is covered (it is non-interactive).
+   - **Subtree capture not wired** (TypeScript), this edits a build file, so **preview before touching code**: name the workspace, the adapter you would use, and the exact config file or start script you would change, then use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) to proceed. If yes, use the installed SDK and wire the matching `@bitfab/sdk/transform` adapter: `@bitfab/sdk/transform/next` wrapping the existing `next.config`, the `/vite`, `/rollup`, `/rolldown`, `/esbuild`, `/bun`, `/webpack`, `/rspack`, `/rsbuild`, `/babel`, `/nest`, or `/typescript` entry in the existing build config, or `--import @bitfab/sdk/transform/register` on the real start command. Preserve every existing wrapper; never replace or bypass one. Python below 3.12 is a runtime upgrade, report it and do not attempt it.
 
    For unusual monorepos or private registries, defer to `/bitfab-update`. Report what was applied and what the user declined. Do not open Bitfab.
 
@@ -524,7 +524,7 @@ Switch which Bitfab organization the plugin reads and writes. Triggered explicit
    Choose the target org:
    - **If the user already named an org** (in their request), match it case-insensitively by name against the list and use that org's `id`. If the name matches none, or matches more than one, fall through to asking.
    - **If the only org is the current one**, there's nothing to switch to, so tell the user and stop (route to cleanup).
-   - **Otherwise** use `AskUserQuestion` which org to switch to. List each org by name and role, and mark the current one. Use the chosen org's `id`.
+   - **Otherwise** use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) which org to switch to. List each org by name and role, and mark the current one. Use the chosen org's `id`.
 
    Only ever use an `id` value returned by `mcp__Bitfab__list_organizations`; never invent one. Carry the chosen id into the next step.
 3. Switch to the chosen org by passing its `authOrganizationId`:
@@ -548,7 +548,7 @@ Switch which Bitfab organization the plugin reads and writes. Triggered explicit
 
    Check whether this project sets `BITFAB_API_KEY` locally: grep for `BITFAB_API_KEY` across `.env`-style files (`.env`, `.env.local`, `.env.development`, and similar) the app loads. Collect **every** file that assigns it, not just the first.
    - **If none is found**, there's nothing local to update, say so in one line and stop (route to cleanup).
-   - **If found**, use `AskUserQuestion` whether to update it to the new org's key, naming **all** the files (absolute paths) that hold it. If the user declines, leave them and stop.
+   - **If found**, use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) whether to update it to the new org's key, naming **all** the files (absolute paths) that hold it. If the user declines, leave them and stop.
 
    If the user agrees, use the `apiKey` value from the switch step's JSON output as the new key (use it directly, do **not** call any `get_*_api_key` tool here: that resolves a `BITFAB_API_KEY` process-env override ahead of the just-switched credential and can hand back the stale pre-switch key). Rewrite that value in place in **every** file you found, replacing the old value, so no loaded env file keeps a stale key. Do **not** print the key value. Then name each file (absolute path) you updated and note that an already-running dev server, REPL, or test runner may need a restart to pick up the new env value, since most file watchers reload code on save but not env files.
 
@@ -595,7 +595,7 @@ The SDK-installed `bitfab-replay` command lets the team regression-test any regi
 
    - **every instrumented function is invocable from the replay registry module and its root is replayable (nothing left to resolve)**: nothing to resolve → step 1 of the Cleanup phase
 
-   If one or more functions can't be invoked or aren't replayable, use `AskUserQuestion` offering Instrument's trace-boundary resolutions:
+   If one or more functions can't be invoked or aren't replayable, use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) offering Instrument's trace-boundary resolutions:
 
    > A) **Move the trace to an inner function** → step 1 of the Cleanup phase
    > B) **Refactor** *(recommended)* → step 1 of the Cleanup phase
@@ -706,7 +706,7 @@ Iterate on span-rendering templates for one trace function. Read the current tem
    1. Call `mcp__Bitfab__list_trace_functions` to enumerate the org's traced functions. The tool returns flat `FUNCTION: <key>` lines; work from those keys directly. Use **only** the keys returned: do NOT invent or infer descriptions of what each function does from its name. Key names are often ambiguous, and guessing produces hallucinated summaries that confuse the user.
    2. Grep this repo for each key in parallel (across `*.ts`, `*.tsx`, `*.py`, `*.rb`, `*.go`, `*.baml`) so you know which keys are instrumented here. Mark each as ✅ instrumented here (with file path) or ⚠️ not found in this repo.
    3. Present a compact list in the question text showing only: `<key>` · `<repo marker + path>`. No invented summaries.
-   4. Use `AskUserQuestion` with 2 options: the recommended function (prefer ✅ instrumented here, and matching session context when one is clearly relevant) and a free-text "Type a function key" option. If nothing is instrumented in this repo, say so explicitly in the question, don't hide it.
+   4. Use `AskQuestion` (or, if it is not available, ask in plain text with lettered options) with 2 options: the recommended function (prefer ✅ instrumented here, and matching session context when one is clearly relevant) and a free-text "Type a function key" option. If nothing is instrumented in this repo, say so explicitly in the question, don't hide it.
 
    - **argument supplied**: use it as the trace function key and continue → step 2
    - **no argument**: list trace functions, ask the user, then continue with the chosen key → step 2
@@ -730,7 +730,7 @@ Iterate on span-rendering templates for one trace function. Read the current tem
    3. Call `mcp__Bitfab__get_template` with `spanType` and `traceFunctionKey: <key>` to read the **live** content. The response labels its source: `scoped to traceFunctionKey "<key>"` (a per-key row already exists), `org-global override` (no per-key row yet, this is your seed for the first save), or `source: file <name>` (no DB rows at all). **Always** read before write: the prior round may have edited the same template, and overwriting blindly drops that work.
    4. Edit the returned source in-context, **one focused change per round**. Resist the urge to bundle multiple unrelated tweaks into a single save: small steps let the user see each effect land on the preview and redirect mid-loop if the change isn't quite right. Stay inside the documented Nunjucks variables and filters (per the reference). Don't introduce `{% extends %}`; the assembler injects into `base.njk`'s content block, so extends will break composition. When adding new visible regions, **decorate them with the catalog anchors** (`data-section`, `data-field-path`, `data-iter-index`) so future clicks resolve cleanly.
    5. Call `mcp__Bitfab__save_template` with `spanType`, `traceFunctionKey: <key>`, and the full edited body. The tool upserts the per-function row in place (no version bump, no row juggling). On the first save for a span type the row is created; subsequent edits update it. The preview updates when the save completes.
-   6. Acknowledge the save in one short line (e.g. "Saved."). The live view (the preview page in preview mode, or the trace the user already has open in inline mode) subscribes to SSE `template:updated` events and re-renders automatically, so do NOT tell the user to refresh. Do not paste the template body back into chat. After a non-trivial change you may briefly ask with `AskUserQuestion`  whether the result looks right before starting the next round; for obvious tweaks (a label rename, a colour swap), skip the check and proceed.
+   6. Acknowledge the save in one short line (e.g. "Saved."). The live view (the preview page in preview mode, or the trace the user already has open in inline mode) subscribes to SSE `template:updated` events and re-renders automatically, so do NOT tell the user to refresh. Do not paste the template body back into chat. After a non-trivial change you may briefly ask with `AskQuestion` (or in plain text with lettered options if it is not available)  whether the result looks right before starting the next round; for obvious tweaks (a label rename, a colour swap), skip the check and proceed.
 
 
    Continue until the user says they are done. - **user explicitly says they're done (the only exit in inline mode)**: exit the loop and acknowledge → step 1 of the Cleanup phase
@@ -790,9 +790,9 @@ Whenever the user picks "refactor to extract a pure core" (or any option that mo
 
 2. **Present the plan verbatim** to the user, in the same format above.
 
-3. **AskUserQuestion** with exactly two options:
+3. **Use `AskQuestion` (or, if it is not available, ask in plain text with lettered options)** with exactly two options:
    - **"Apply refactor"**: proceed to write the changes
-   - **"Cancel"**: return to the previous AskUserQuestion (Instrument's workflow-selection (a)/(b)/(c), or Replay's non-replayable-root three-option prompt) so the user can pick a different resolution
+   - **"Cancel"**: return to the previous AskQuestion (Instrument's workflow-selection (a)/(b)/(c), or Replay's non-replayable-root three-option prompt) so the user can pick a different resolution
 
 Never modify existing code on a refactor path without completing this three-step confirmation. Adding new instrumentation wrappers to unchanged functions is not a refactor and does not need this confirmation (purely-additive instrumentation). But if the write-instrumentation step itself turns out to require modifying, re-implementing, or hand-reconstructing an existing call to seat a root (the wrap is not actually additive), that IS a refactor: stop and run this three-step confirmation before touching the code.
 
