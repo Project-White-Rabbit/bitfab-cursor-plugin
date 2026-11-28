@@ -7,6 +7,7 @@ export const platform = {
     remotePackageJsonPath: "package.json",
     cliBinary: "cursor",
     displayName: "Cursor",
+    replaysNeedSessionIdFromContext: true,
     supportsAutoUpdate: false,
     marketplaceName: "bitfab",
     pluginName: "bitfab",
